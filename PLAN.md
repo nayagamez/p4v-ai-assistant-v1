@@ -1,6 +1,6 @@
 # P4V AI Assistant - 개발 계획
 
-## 현재 상태 (v0.3)
+## 현재 상태 (v0.4)
 
 ### 완료된 기능
 - [x] 프로젝트 기본 구조 설정
@@ -17,6 +17,7 @@
 - [x] **배치 처리 + Redis Memory 컨텍스트 유지**
 - [x] **PyInstaller 빌드** (dist/p4v_ai_assistant.exe)
 - [x] **커스텀 전문가 프롬프트** (Unity, Unreal, 범용)
+- [x] **NSIS 인스톨러** (dist/P4V-AI-Assistant-Setup.exe)
 
 ---
 
@@ -101,46 +102,41 @@ build.bat
 
 ---
 
-## Phase 3: NSIS 인스톨러
+## Phase 3: NSIS 인스톨러 ✅ 완료
 
 ### 목표
 사용자가 원클릭으로 설치할 수 있는 Windows 인스톨러 생성
 
-### 작업 항목
-- [ ] `installer/installer.nsi` - NSIS 스크립트
-- [ ] `installer/license.txt` - 라이선스 파일
-- [ ] 인스톨러 아이콘
-- [ ] 설치 시 webhook URL 입력 다이얼로그
-- [ ] 자동 P4V Custom Tools 등록
-- [ ] 시작 메뉴 바로가기 생성
-- [ ] 언인스톨러 구현
+### 완료된 작업
+- [x] `installer/installer.nsi` - NSIS 스크립트
+- [x] `installer/license.txt` - 라이선스 파일
+- [x] `installer/build_installer.bat` - 인스톨러 빌드 스크립트
+- [x] 설치 시 Webhook URL 입력 다이얼로그 (기본값 포함)
+- [x] 자동 P4V Custom Tools 등록
+- [x] 시작 메뉴 바로가기 생성
+- [x] 언인스톨러 구현
+- [x] 프로그램 추가/제거에 등록
 
-### 인스톨러 기능
-1. **설치 시:**
-   - exe 파일을 `C:\Program Files\P4V-AI-Assistant\`에 복사
-   - Webhook URL 입력 받아 config.json 생성
-   - `p4v_ai_tool.exe install` 실행 → customtools.xml 등록
-   - 시작 메뉴 바로가기 생성
-
-2. **제거 시:**
-   - `p4v_ai_tool.exe uninstall` 실행
-   - 설치 파일 삭제
-   - 시작 메뉴 바로가기 제거
+### 인스톨러 빌드
+```bash
+cd installer && build_installer.bat
+# 출력: dist/P4V-AI-Assistant-Setup.exe (~15MB)
+```
 
 ---
 
 ## Phase 4: 추가 개선사항
 
+### 기능 개선 (우선순위 높음)
+- [ ] **Add 파일 전체 내용 리뷰** - 새로 추가된 파일은 diff 대신 전체 내용을 전송하여 리뷰
+- [ ] Description 생성 후 미리보기 → 적용 확인
+- [ ] 코드 리뷰 결과 P4V 주석으로 추가 옵션
+- [ ] 여러 Changelist 일괄 처리
+
 ### UI/UX 개선
 - [ ] 진행률 표시 개선 (퍼센트 표시)
 - [ ] 설정 GUI 개선 (더 많은 옵션)
 - [ ] 다크 모드 지원
-
-### 기능 개선
-- [ ] Description 생성 후 미리보기 → 적용 확인
-- [ ] 코드 리뷰 결과 P4V 주석으로 추가 옵션
-- [ ] 여러 Changelist 일괄 처리
-- [ ] 오프라인 모드 (캐시된 결과 사용)
 
 ### 안정성
 - [ ] 로깅 시스템 추가
