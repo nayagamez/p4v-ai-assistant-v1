@@ -325,6 +325,259 @@ class DescriptionDialog:
         self.root.mainloop()
 
 
+class ReviewDialog:
+    """코드 리뷰 결과 다이얼로그 (진행 + 결과)"""
+
+    def __init__(
+        self,
+        title: str = "AI 코드 리뷰",
+        changelist: int = 0
+    ):
+        self.root = tk.Tk()
+        self.root.title(title)
+        self.root.geometry("750x550")
+        self.root.resizable(True, True)
+
+        # 화면 중앙에 배치
+        self.root.update_idletasks()
+        x = (self.root.winfo_screenwidth() - 750) // 2
+        y = (self.root.winfo_screenheight() - 550) // 2
+        self.root.geometry(f"750x550+{x}+{y}")
+
+        self.root.attributes("-topmost", True)
+
+        self.changelist = changelist
+        self.review_result = None
+        self._closed = False
+
+        # 메인 프레임
+        self.main_frame = ttk.Frame(self.root, padding=15)
+        self.main_frame.pack(fill=tk.BOTH, expand=True)
+
+        # 초기에는 진행 상태 UI
+        self._build_progress_ui()
+
+        # 닫기 버튼 비활성화 (진행 중에는)
+        self.root.protocol("WM_DELETE_WINDOW", lambda: None)
+
+    def _build_progress_ui(self) -> None:
+        """진행 상태 UI 구성"""
+        self.progress_frame = ttk.Frame(self.main_frame)
+        self.progress_frame.pack(fill=tk.BOTH, expand=True)
+
+        # 메시지
+        self.progress_label = ttk.Label(
+            self.progress_frame,
+            text=f"Changelist #{self.changelist} 리뷰 중...",
+            font=("", 11)
+        )
+        self.progress_label.pack(pady=(100, 20))
+
+        # 진행률 바
+        self.progress_bar = ttk.Progressbar(
+            self.progress_frame,
+            mode="indeterminate",
+            length=400
+        )
+        self.progress_bar.pack(pady=(0, 15))
+        self.progress_bar.start(10)
+
+        # 상태 메시지
+        self.status_label = ttk.Label(
+            self.progress_frame,
+            text="",
+            font=("", 9),
+            foreground="gray"
+        )
+        self.status_label.pack()
+
+    def _build_result_ui(self, success: bool, error: str = "") -> None:
+        """결과 상태 UI 구성"""
+        self.progress_frame.destroy()
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+
+        result_frame = ttk.Frame(self.main_frame)
+        result_frame.pack(fill=tk.BOTH, expand=True)
+
+        if success and self.review_result:
+            # 헤더 프레임 (점수 + 통계)
+            header_frame = ttk.Frame(result_frame)
+            header_frame.pack(fill=tk.X, pady=(0, 10))
+
+            # 점수 표시
+            score = self.review_result.overall_score
+            if score >= 70:
+                score_color = "green"
+            elif score >= 50:
+                score_color = "orange"
+            else:
+                score_color = "red"
+
+            score_label = ttk.Label(
+                header_frame,
+                text=f"점수: {score}/100",
+                font=("", 16, "bold"),
+                foreground=score_color
+            )
+            score_label.pack(side=tk.LEFT)
+
+            # 통계 표시
+            stats = self.review_result.statistics
+            stats_text = (
+                f"Critical: {stats.get('critical', 0)} | "
+                f"Warning: {stats.get('warning', 0)} | "
+                f"Info: {stats.get('info', 0)} | "
+                f"Suggestion: {stats.get('suggestion', 0)}"
+            )
+            stats_label = ttk.Label(header_frame, text=stats_text, font=("", 9))
+            stats_label.pack(side=tk.RIGHT, pady=(5, 0))
+
+            # 요약
+            summary_frame = ttk.LabelFrame(result_frame, text="요약", padding=10)
+            summary_frame.pack(fill=tk.X, pady=(0, 10))
+
+            summary_label = ttk.Label(
+                summary_frame,
+                text=self.review_result.summary or "리뷰가 완료되었습니다.",
+                font=("", 10),
+                wraplength=680
+            )
+            summary_label.pack(anchor=tk.W)
+
+            # 코멘트 목록 (Treeview)
+            comments_frame = ttk.LabelFrame(result_frame, text=f"상세 리뷰 ({len(self.review_result.comments)}건)", padding=5)
+            comments_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+
+            # Treeview 생성
+            columns = ("severity", "file", "line", "message")
+            self.tree = ttk.Treeview(comments_frame, columns=columns, show="headings", height=10)
+            self.tree.heading("severity", text="심각도")
+            self.tree.heading("file", text="파일")
+            self.tree.heading("line", text="라인")
+            self.tree.heading("message", text="메시지")
+
+            self.tree.column("severity", width=70, minwidth=60)
+            self.tree.column("file", width=200, minwidth=100)
+            self.tree.column("line", width=50, minwidth=40)
+            self.tree.column("message", width=380, minwidth=200)
+
+            # 스크롤바
+            scrollbar = ttk.Scrollbar(comments_frame, orient=tk.VERTICAL, command=self.tree.yview)
+            self.tree.configure(yscrollcommand=scrollbar.set)
+
+            self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+            # 데이터 삽입
+            for comment in self.review_result.comments:
+                file_name = comment.file_path.split("/")[-1] if "/" in comment.file_path else comment.file_path
+                self.tree.insert("", tk.END, values=(
+                    comment.severity.upper(),
+                    file_name,
+                    comment.line_number,
+                    comment.message[:80] + "..." if len(comment.message) > 80 else comment.message
+                ))
+
+            # 상세 보기 영역
+            detail_frame = ttk.LabelFrame(result_frame, text="상세 정보", padding=5)
+            detail_frame.pack(fill=tk.X, pady=(0, 10))
+
+            self.detail_text = scrolledtext.ScrolledText(
+                detail_frame,
+                wrap=tk.WORD,
+                height=5,
+                font=("Consolas", 9)
+            )
+            self.detail_text.pack(fill=tk.X)
+            self.detail_text.insert(tk.END, "코멘트를 선택하면 상세 정보가 표시됩니다.")
+            self.detail_text.config(state=tk.DISABLED)
+
+            self.tree.bind("<<TreeviewSelect>>", self._on_select_comment)
+        else:
+            # 에러 표시
+            error_label = ttk.Label(
+                result_frame,
+                text=f"리뷰 실패: {error}",
+                font=("", 11, "bold"),
+                foreground="red",
+                wraplength=680
+            )
+            error_label.pack(pady=100)
+
+        # 버튼 프레임
+        btn_frame = ttk.Frame(result_frame)
+        btn_frame.pack(pady=(5, 0))
+
+        if success:
+            export_btn = ttk.Button(btn_frame, text="HTML로 내보내기", command=self._on_export, width=15)
+            export_btn.pack(side=tk.LEFT, padx=5)
+
+        close_btn = ttk.Button(btn_frame, text="닫기", command=self._on_close, width=12)
+        close_btn.pack(side=tk.LEFT, padx=5)
+
+        self.root.bind("<Escape>", lambda e: self._on_close())
+
+    def _on_select_comment(self, event) -> None:
+        """코멘트 선택 시 상세 정보 표시"""
+        selection = self.tree.selection()
+        if not selection:
+            return
+
+        idx = self.tree.index(selection[0])
+        if idx < len(self.review_result.comments):
+            comment = self.review_result.comments[idx]
+            detail = f"파일: {comment.file_path}\n"
+            detail += f"라인: {comment.line_number}\n"
+            detail += f"심각도: {comment.severity.upper()}\n"
+            detail += f"카테고리: {comment.category or 'N/A'}\n\n"
+            detail += f"[문제]\n{comment.message}\n"
+            if comment.suggestion:
+                detail += f"\n[제안]\n{comment.suggestion}"
+
+            self.detail_text.config(state=tk.NORMAL)
+            self.detail_text.delete("1.0", tk.END)
+            self.detail_text.insert(tk.END, detail)
+            self.detail_text.config(state=tk.DISABLED)
+
+    def _on_export(self) -> None:
+        """HTML로 내보내기"""
+        from tkinter import filedialog
+        from .report_generator import generate_html_report
+
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".html",
+            filetypes=[("HTML files", "*.html")],
+            initialfilename=f"review_{self.changelist}.html"
+        )
+
+        if file_path:
+            try:
+                generate_html_report(self.review_result, self.changelist, file_path)
+                show_info("내보내기 완료", f"리뷰 결과가 저장되었습니다.\n{file_path}")
+            except Exception as e:
+                show_error("내보내기 실패", f"파일 저장 중 오류가 발생했습니다.\n{str(e)}")
+
+    def update_status(self, message: str) -> None:
+        """상태 메시지 업데이트"""
+        if not self._closed:
+            self.root.after(0, lambda: self.status_label.config(text=message))
+
+    def show_result(self, result) -> None:
+        """결과 표시로 전환"""
+        self.review_result = result
+        error = result.error if not result.success else ""
+        self.root.after(0, lambda: self._build_result_ui(result.success, error))
+
+    def _on_close(self) -> None:
+        """다이얼로그 닫기"""
+        self._closed = True
+        self.root.destroy()
+
+    def run(self) -> None:
+        """다이얼로그 실행"""
+        self.root.mainloop()
+
+
 class SettingsDialog:
     """설정 다이얼로그"""
 

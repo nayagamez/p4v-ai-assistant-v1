@@ -9,10 +9,12 @@ import threading
 
 from .config_manager import get_config
 from .commands.description import run_description_command
+from .commands.review import run_review_command, ReviewResult
 from .commands.install import install_tool, uninstall_tool
 from .p4_client import P4Client
 from .ui.dialogs import (
     DescriptionDialog,
+    ReviewDialog,
     SettingsDialog,
     show_error,
     show_info
@@ -74,6 +76,56 @@ def cmd_description(args):
                 success=False,
                 error=str(e)
             )
+
+    # 스레드에서 작업 실행
+    thread = threading.Thread(target=task, daemon=True)
+    thread.start()
+
+    # 다이얼로그 실행
+    dialog.run()
+    return 0
+
+
+def cmd_review(args):
+    """AI 코드 리뷰 명령"""
+    config = get_config()
+
+    # 설정 확인
+    webhook_url = args.webhook_url or config.webhook_url
+    if not webhook_url:
+        show_error(
+            "설정 오류",
+            "Webhook URL이 설정되지 않았습니다.\n"
+            "설정을 먼저 진행해주세요.\n\n"
+            "명령어: p4v_ai_tool.exe settings"
+        )
+        return 1
+
+    port = args.port or ""
+    user = args.user or ""
+    client = args.client or ""
+
+    # 리뷰 다이얼로그 생성
+    dialog = ReviewDialog(
+        title="AI 코드 리뷰",
+        changelist=args.changelist
+    )
+
+    # 백그라운드 작업
+    def task():
+        try:
+            result = run_review_command(
+                changelist=args.changelist,
+                port=port,
+                user=user,
+                client=client,
+                webhook_url=webhook_url,
+                progress_callback=dialog.update_status
+            )
+            dialog.show_result(result)
+        except Exception as e:
+            error_result = ReviewResult(success=False, error=str(e))
+            dialog.show_result(error_result)
 
     # 스레드에서 작업 실행
     thread = threading.Thread(target=task, daemon=True)
@@ -166,6 +218,36 @@ def main():
         help="생성된 description을 자동으로 적용하지 않음"
     )
     desc_parser.set_defaults(func=cmd_description)
+
+    # review 명령
+    review_parser = subparsers.add_parser(
+        "review",
+        help="AI 코드 리뷰",
+        aliases=["r"]
+    )
+    review_parser.add_argument(
+        "--changelist", "-c",
+        type=int,
+        required=True,
+        help="Changelist 번호"
+    )
+    review_parser.add_argument(
+        "--port", "-p",
+        help="Perforce 서버 주소 (예: ssl:perforce:1666)"
+    )
+    review_parser.add_argument(
+        "--user", "-u",
+        help="Perforce 사용자명"
+    )
+    review_parser.add_argument(
+        "--client",
+        help="Perforce 클라이언트(workspace) 이름"
+    )
+    review_parser.add_argument(
+        "--webhook-url",
+        help="n8n Webhook URL (설정 파일 대신 사용)"
+    )
+    review_parser.set_defaults(func=cmd_review)
 
     # settings 명령
     settings_parser = subparsers.add_parser(

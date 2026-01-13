@@ -16,6 +16,11 @@ TOOLS = [
         "context_menu": True,  # Changelist 컨텍스트 메뉴에 추가
     },
     {
+        "name": "AI 코드 리뷰",
+        "arguments": "review --changelist %p",
+        "context_menu": True,  # Changelist 컨텍스트 메뉴에 추가
+    },
+    {
         "name": "AI Assistant 설정",
         "arguments": "settings",
         "context_menu": False,  # Tools 메뉴에만 추가
