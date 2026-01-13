@@ -93,8 +93,8 @@ def add_tool_to_root(root: ET.Element, exe_path: str) -> None:
     ET.SubElement(definition, "InitDir").text = init_dir
     ET.SubElement(definition, "Shortcut")
 
-    console = ET.SubElement(tool_def, "Console")
-    ET.SubElement(console, "CloseOnExit").text = "true"
+    # Console 요소 제거: 터미널 창 없이 실행
+    # (Run tool in terminal window 옵션 비활성화)
 
     ET.SubElement(tool_def, "AddToContext").text = "true"
 
