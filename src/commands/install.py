@@ -9,8 +9,18 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 # 도구 정의
-TOOL_NAME = "AI Description 생성"
-TOOL_ARGUMENTS = "description --changelist %p"
+TOOLS = [
+    {
+        "name": "AI Description 생성",
+        "arguments": "description --changelist %p",
+        "context_menu": True,  # Changelist 컨텍스트 메뉴에 추가
+    },
+    {
+        "name": "AI Assistant 설정",
+        "arguments": "settings",
+        "context_menu": False,  # Tools 메뉴에만 추가
+    },
+]
 
 
 def get_customtools_path() -> Path:
@@ -56,7 +66,7 @@ def get_project_root() -> str:
         return os.path.dirname(os.path.dirname(os.path.dirname(current_file)))
 
 
-def get_command_and_args(exe_path: str) -> Tuple[str, str, str]:
+def get_command_and_args(exe_path: str, tool_arguments: str) -> Tuple[str, str, str]:
     """
     실행 명령, 인자, 작업 디렉토리 반환
 
@@ -65,29 +75,29 @@ def get_command_and_args(exe_path: str) -> Tuple[str, str, str]:
     """
     if getattr(sys, 'frozen', False):
         # PyInstaller로 빌드된 exe인 경우
-        return exe_path, TOOL_ARGUMENTS, ""
+        return exe_path, tool_arguments, ""
     else:
         # Python 스크립트로 실행 중인 경우
         project_root = get_project_root()
-        return exe_path, f"-m src.main {TOOL_ARGUMENTS}", project_root
+        return exe_path, f"-m src.main {tool_arguments}", project_root
 
 
 def create_new_customtools_xml(exe_path: str) -> ET.Element:
     """새 customtools.xml 루트 요소 생성"""
     root = ET.Element("CustomToolDefList")
     root.set("varName", "customtooldeflist")
-    add_tool_to_root(root, exe_path)
+    add_all_tools_to_root(root, exe_path)
     return root
 
 
-def add_tool_to_root(root: ET.Element, exe_path: str) -> None:
-    """루트 요소에 도구 추가"""
-    command, arguments, init_dir = get_command_and_args(exe_path)
+def add_tool_to_root(root: ET.Element, exe_path: str, tool: dict) -> None:
+    """루트 요소에 단일 도구 추가"""
+    command, arguments, init_dir = get_command_and_args(exe_path, tool["arguments"])
 
     tool_def = ET.SubElement(root, "CustomToolDef")
 
     definition = ET.SubElement(tool_def, "Definition")
-    ET.SubElement(definition, "Name").text = TOOL_NAME
+    ET.SubElement(definition, "Name").text = tool["name"]
     ET.SubElement(definition, "Command").text = command
     ET.SubElement(definition, "Arguments").text = arguments
     ET.SubElement(definition, "InitDir").text = init_dir
@@ -96,18 +106,38 @@ def add_tool_to_root(root: ET.Element, exe_path: str) -> None:
     # Console 요소 제거: 터미널 창 없이 실행
     # (Run tool in terminal window 옵션 비활성화)
 
-    ET.SubElement(tool_def, "AddToContext").text = "true"
+    if tool.get("context_menu", False):
+        ET.SubElement(tool_def, "AddToContext").text = "true"
 
 
-def find_tool_element(root: ET.Element) -> Optional[ET.Element]:
+def add_all_tools_to_root(root: ET.Element, exe_path: str) -> None:
+    """루트 요소에 모든 도구 추가"""
+    for tool in TOOLS:
+        add_tool_to_root(root, exe_path, tool)
+
+
+def find_tool_element(root: ET.Element, tool_name: str) -> Optional[ET.Element]:
     """기존 도구 요소 찾기"""
     for tool_def in root.findall("CustomToolDef"):
         definition = tool_def.find("Definition")
         if definition is not None:
             name_elem = definition.find("Name")
-            if name_elem is not None and name_elem.text == TOOL_NAME:
+            if name_elem is not None and name_elem.text == tool_name:
                 return tool_def
     return None
+
+
+def find_all_tool_elements(root: ET.Element) -> list:
+    """모든 AI Assistant 도구 요소 찾기"""
+    tool_names = [tool["name"] for tool in TOOLS]
+    found = []
+    for tool_def in root.findall("CustomToolDef"):
+        definition = tool_def.find("Definition")
+        if definition is not None:
+            name_elem = definition.find("Name")
+            if name_elem is not None and name_elem.text in tool_names:
+                found.append(tool_def)
+    return found
 
 
 def install_tool(exe_path: Optional[str] = None) -> dict:
@@ -144,21 +174,22 @@ def install_tool(exe_path: Optional[str] = None) -> dict:
                 result["message"] = f"기존 customtools.xml 파싱 실패: {e}"
                 return result
 
-            # 이미 설치되어 있는지 확인
-            existing_tool = find_tool_element(root)
-            if existing_tool is not None:
-                # 기존 도구 업데이트
+            # 기존 도구들 제거
+            existing_tools = find_all_tool_elements(root)
+            for existing_tool in existing_tools:
                 root.remove(existing_tool)
-                add_tool_to_root(root, resolved_exe_path)
-                result["message"] = f"'{TOOL_NAME}' 도구가 업데이트되었습니다."
+
+            # 모든 도구 추가
+            add_all_tools_to_root(root, resolved_exe_path)
+
+            if existing_tools:
+                result["message"] = "AI Assistant 도구가 업데이트되었습니다."
             else:
-                # 새 도구 추가
-                add_tool_to_root(root, resolved_exe_path)
-                result["message"] = f"'{TOOL_NAME}' 도구가 추가되었습니다."
+                result["message"] = "AI Assistant 도구가 추가되었습니다."
         else:
             # 새 파일 생성
             root = create_new_customtools_xml(resolved_exe_path)
-            result["message"] = f"customtools.xml이 생성되고 '{TOOL_NAME}' 도구가 추가되었습니다."
+            result["message"] = "customtools.xml이 생성되고 AI Assistant 도구가 추가되었습니다."
 
         # XML 저장
         tree = ET.ElementTree(root)
@@ -169,8 +200,12 @@ def install_tool(exe_path: Optional[str] = None) -> dict:
             f.write(b'<!--perforce-xml-version=1.0-->\n')
             tree.write(f, encoding="UTF-8", xml_declaration=False)
 
+        tool_names = ", ".join([f"'{t['name']}'" for t in TOOLS])
         result["success"] = True
-        result["message"] += f"\n\n파일 위치: {customtools_path}\n실행 파일: {resolved_exe_path}\n\nP4V를 재시작하면 컨텍스트 메뉴에서 사용할 수 있습니다."
+        result["message"] += f"\n\n등록된 도구: {tool_names}"
+        result["message"] += f"\n파일 위치: {customtools_path}"
+        result["message"] += f"\n실행 파일: {resolved_exe_path}"
+        result["message"] += "\n\nP4V를 재시작하면 메뉴에서 사용할 수 있습니다."
 
     except InstallError as e:
         result["message"] = str(e)
@@ -206,13 +241,14 @@ def uninstall_tool() -> dict:
             result["message"] = f"customtools.xml 파싱 실패: {e}"
             return result
 
-        existing_tool = find_tool_element(root)
-        if existing_tool is None:
-            result["message"] = f"'{TOOL_NAME}' 도구가 설치되어 있지 않습니다."
+        existing_tools = find_all_tool_elements(root)
+        if not existing_tools:
+            result["message"] = "AI Assistant 도구가 설치되어 있지 않습니다."
             result["success"] = True
             return result
 
-        root.remove(existing_tool)
+        for existing_tool in existing_tools:
+            root.remove(existing_tool)
 
         # XML 저장
         tree = ET.ElementTree(root)
@@ -224,7 +260,7 @@ def uninstall_tool() -> dict:
             tree.write(f, encoding="UTF-8", xml_declaration=False)
 
         result["success"] = True
-        result["message"] = f"'{TOOL_NAME}' 도구가 제거되었습니다.\n\nP4V를 재시작하면 변경사항이 적용됩니다."
+        result["message"] = "AI Assistant 도구가 제거되었습니다.\n\nP4V를 재시작하면 변경사항이 적용됩니다."
 
     except Exception as e:
         result["message"] = f"제거 중 오류 발생: {e}"
