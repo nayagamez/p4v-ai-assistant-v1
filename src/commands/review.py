@@ -9,9 +9,9 @@ from ..p4_client import P4Client, P4Error, ChangelistInfo, FileChange
 from ..n8n_client import N8NClient, N8NError
 
 
-# 배치 분할 임계값
-MAX_FILES_PER_BATCH = 10
-MAX_LINES_PER_BATCH = 1000
+# 배치 분할 임계값 (Gemini 2.5 Flash 기준)
+MAX_FILES_PER_BATCH = 50
+MAX_LINES_PER_BATCH = 5000
 
 
 @dataclass
