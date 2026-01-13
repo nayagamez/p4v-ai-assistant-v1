@@ -5,12 +5,14 @@ P4V의 Custom Tools에서 호출되는 메인 스크립트
 import argparse
 import sys
 
+import threading
+
 from .config_manager import get_config
 from .commands.description import run_description_command
 from .commands.install import install_tool, uninstall_tool
+from .p4_client import P4Client
 from .ui.dialogs import (
-    run_with_progress,
-    ResultDialog,
+    DescriptionDialog,
     SettingsDialog,
     show_error,
     show_info
@@ -32,50 +34,54 @@ def cmd_description(args):
         )
         return 1
 
-    def task(progress_callback):
-        return run_description_command(
-            changelist=args.changelist,
-            port=args.port or "",
-            user=args.user or "",
-            client=args.client or "",
-            webhook_url=webhook_url,
-            auto_apply=not args.no_apply,
-            progress_callback=progress_callback
-        )
+    port = args.port or ""
+    user = args.user or ""
+    client = args.client or ""
 
-    try:
-        result = run_with_progress(
-            task,
-            title="AI Description 생성",
-            message=f"Changelist #{args.changelist} 분석 중..."
-        )
+    # 적용 콜백 함수
+    def apply_callback(changelist: int, description: str):
+        p4 = P4Client(port=port, user=user, client=client)
+        p4.update_changelist_description(changelist, description)
 
-        if result["success"]:
-            detail = f"생성된 Description:\n\n{result['description']}"
-            if result.get("summary"):
-                detail += f"\n\n요약: {result['summary']}"
+    # 통합 다이얼로그 생성
+    dialog = DescriptionDialog(
+        title="AI Description 생성",
+        changelist=args.changelist,
+        on_apply_callback=apply_callback
+    )
 
-            applied_text = "적용됨" if result.get("applied") else "적용 안됨"
+    # 백그라운드 작업
+    def task():
+        try:
+            result = run_description_command(
+                changelist=args.changelist,
+                port=port,
+                user=user,
+                client=client,
+                webhook_url=webhook_url,
+                auto_apply=False,  # 사용자가 버튼으로 결정
+                progress_callback=dialog.update_status
+            )
 
-            ResultDialog(
-                title="AI Description 생성 완료",
-                success=True,
-                message=f"Description이 성공적으로 생성되었습니다. ({applied_text})",
-                detail=detail
-            ).run()
-            return 0
-        else:
-            ResultDialog(
-                title="AI Description 생성 실패",
+            dialog.show_result(
+                success=result["success"],
+                description=result.get("description", ""),
+                summary=result.get("summary", ""),
+                error=result.get("error", "")
+            )
+        except Exception as e:
+            dialog.show_result(
                 success=False,
-                message="Description 생성에 실패했습니다.",
-                detail=result.get("error", "알 수 없는 오류")
-            ).run()
-            return 1
+                error=str(e)
+            )
 
-    except Exception as e:
-        show_error("오류", f"예상치 못한 오류가 발생했습니다.\n\n{str(e)}")
-        return 1
+    # 스레드에서 작업 실행
+    thread = threading.Thread(target=task, daemon=True)
+    thread.start()
+
+    # 다이얼로그 실행
+    dialog.run()
+    return 0
 
 
 def cmd_settings(args):

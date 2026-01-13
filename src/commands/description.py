@@ -2,10 +2,37 @@
 AI Description 생성 명령
 Changelist의 diff를 분석하여 커밋 메시지 자동 생성
 """
+import re
 from typing import Callable, Optional
 
 from ..p4_client import P4Client, P4Error
 from ..n8n_client import N8NClient, N8NError
+
+
+# 접두사 패턴: 대괄호로 감싸진 텍스트가 연속으로 나오는 부분
+# 예: [1UD][클라/홍길동] 또는 [클라/홍길동]
+PREFIX_PATTERN = r'^(\[[^\]]+\])+\s*'
+
+
+def extract_prefix(description: str) -> str:
+    """
+    기존 description에서 접두사 추출
+
+    Args:
+        description: 현재 changelist description
+
+    Returns:
+        접두사 문자열 (없으면 빈 문자열)
+
+    Examples:
+        "[1UD][클라/홍길동] 작업 중" -> "[1UD][클라/홍길동]"
+        "[클라/홍길동] 버그 수정" -> "[클라/홍길동]"
+        "작업 중..." -> ""
+    """
+    if not description:
+        return ""
+    match = re.match(PREFIX_PATTERN, description)
+    return match.group(0).rstrip() if match else ""
 
 
 class DescriptionGenerator:
@@ -67,12 +94,19 @@ class DescriptionGenerator:
 
             response = self.n8n.request_description(changelist_info)
 
-            description = response.get("description", "")
+            ai_description = response.get("description", "")
             summary = response.get("summary", "")
 
-            if not description:
+            if not ai_description:
                 result["error"] = "AI가 description을 생성하지 못했습니다."
                 return result
+
+            # 기존 description에서 접두사 추출 후 적용
+            prefix = extract_prefix(changelist_info.description)
+            if prefix:
+                description = f"{prefix}{ai_description}"
+            else:
+                description = ai_description
 
             result["description"] = description
             result["summary"] = summary
