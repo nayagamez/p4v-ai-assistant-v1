@@ -1,0 +1,385 @@
+{
+  "name": "P4V AI Assistant (Description + Review)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "p4v-ai-assistant",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-600, 0],
+      "id": "webhook-main",
+      "name": "Webhook",
+      "webhookId": "p4v-ai-assistant"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "condition-review",
+                    "leftValue": "={{ $json.body.request_type }}",
+                    "rightValue": "review",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "review"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "condition-description",
+                    "leftValue": "={{ $json.body.request_type }}",
+                    "rightValue": "description",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "description"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [-400, 0],
+      "id": "switch-request-type",
+      "name": "Switch Request Type"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Webhook에서 받은 데이터\nconst body = $input.first().json.body;\nconst files = body.files || [];\n\n// 파일 변경 내용을 문자열로 변환\nconst filesInfo = files.map((f, idx) => {\n  return `### 파일 ${idx + 1}: ${f.depot_path}\n- 액션: ${f.action}\n\n\\`\\`\\`diff\n${f.diff || '(diff 없음)'}\n\\`\\`\\``;\n}).join('\\n\\n');\n\n// User Message에 넣을 내용\nconst userMessage = `## Changelist 정보\n- 번호: ${body.changelist.number}\n- 사용자: ${body.changelist.user}\n- 현재 설명: ${body.changelist.current_description || '(없음)'}\n\n## 변경된 파일 (${files.length}개)\n\n${filesInfo}\n\n위 코드 변경 내용을 분석하여 커밋 메시지를 작성해주세요.`;\n\nreturn {\n  userMessage: userMessage,\n  changelist: body.changelist,\n  request_type: 'description'\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-160, 160],
+      "id": "prepare-description-prompt",
+      "name": "Prepare Description Prompt"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.userMessage }}",
+        "options": {
+          "systemMessage": "당신은 시니어 소프트웨어 개발자입니다. 코드 변경 내용을 분석하여 커밋 메시지를 작성합니다.\n\n## 규칙\n1. 첫 줄: [태그] 제목 (50자 이내)\n   - [Feature]: 새 기능\n   - [Fix]: 버그 수정\n   - [Refactor]: 리팩토링\n   - [Style]: 스타일 변경\n   - [Docs]: 문서 변경\n   - [Chore]: 기타 작업\n2. 빈 줄 후 상세 설명\n3. 파일별로 변경 내용을 bullet point로 설명\n4. 한국어로 작성\n5. 커밋 메시지만 출력 (다른 설명 불필요)"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [80, 160],
+      "id": "ai-agent-description",
+      "name": "AI Agent (Description)",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// LLM 응답 가져오기\nconst llmResponse = $input.first().json;\n\n// LLM 출력 텍스트 추출\nconst description = llmResponse.text || llmResponse.output || llmResponse.response || '';\n\n// 첫 줄을 summary로 사용\nconst lines = description.trim().split('\\n');\nconst summary = lines[0].replace(/^\\[.*?\\]\\s*/, '').trim();\n\nreturn {\n  success: true,\n  description: description.trim(),\n  summary: summary\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [320, 120],
+      "id": "format-description-response",
+      "name": "Format Description Response"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Webhook에서 받은 데이터\nconst body = $input.first().json.body;\nconst files = body.files || [];\n\n// 파일 변경 내용을 문자열로 변환\nconst filesInfo = files.map((f, idx) => {\n  const fileName = f.depot_path.split('/').pop();\n  return `### 파일 ${idx + 1}: ${f.depot_path}\n- 액션: ${f.action}\n- 리비전: ${f.revision || 'N/A'}\n\n\\`\\`\\`diff\n${f.diff || '(diff 없음)'}\n\\`\\`\\``;\n}).join('\\n\\n');\n\n// User Message에 넣을 내용\nconst userMessage = `## Changelist 정보\n- 번호: ${body.changelist.number}\n- 사용자: ${body.changelist.user}\n- 설명: ${body.changelist.current_description || '(없음)'}\n\n## 리뷰 대상 파일 (${files.length}개)\n\n${filesInfo}\n\n위 코드 변경사항을 분석하여 코드 리뷰를 수행해주세요.`;\n\nreturn {\n  userMessage: userMessage,\n  changelist: body.changelist,\n  files: files,\n  request_type: 'review'\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-160, -160],
+      "id": "prepare-review-prompt",
+      "name": "Prepare Review Prompt"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.userMessage }}",
+        "options": {
+          "systemMessage": "당신은 시니어 소프트웨어 엔지니어이자 코드 리뷰어입니다.\n주어진 코드 변경사항(diff)을 분석하여 코드 리뷰를 수행합니다.\n\n## 리뷰 관점\n1. 버그 가능성 (null 체크 누락, 경계 조건 오류 등)\n2. 성능 이슈 (불필요한 루프, 메모리 누수 가능성 등)\n3. 보안 취약점 (입력 검증 누락, 하드코딩된 비밀정보 등)\n4. 코딩 컨벤션/베스트 프랙티스\n5. 가독성 및 유지보수성\n\n## 응답 형식\n반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트는 포함하지 마세요.\n\n```json\n{\n  \"summary\": \"전체 리뷰 요약 (1-2문장, 한국어)\",\n  \"overall_score\": 0부터 100 사이의 점수,\n  \"comments\": [\n    {\n      \"file_path\": \"파일 경로 (depot path 그대로)\",\n      \"line_number\": 문제가 있는 라인 번호 (숫자),\n      \"severity\": \"critical 또는 warning 또는 info 또는 suggestion\",\n      \"category\": \"bug 또는 security 또는 performance 또는 style 또는 maintainability\",\n      \"message\": \"문제 설명 (한국어)\",\n      \"suggestion\": \"수정 제안 (한국어, 선택사항)\"\n    }\n  ]\n}\n```\n\n## 심각도 기준\n- critical: 즉시 수정 필요 (버그, 보안 취약점, 크래시 가능성)\n- warning: 수정 권장 (성능 이슈, 잠재적 문제)\n- info: 참고 사항 (컨벤션, 스타일)\n- suggestion: 개선 제안 (더 나은 방법 제시)\n\n## 점수 기준\n- 90-100: 훌륭함, 문제 없음\n- 70-89: 양호, 사소한 개선 필요\n- 50-69: 보통, 몇 가지 수정 권장\n- 30-49: 미흡, 여러 문제 있음\n- 0-29: 심각, 즉시 수정 필요\n\n## 주의사항\n- 발견된 이슈가 없으면 comments를 빈 배열 []로 반환\n- line_number는 diff에서 추정 가능한 경우에만 포함, 불확실하면 0\n- JSON 형식만 출력, 추가 설명 금지"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [80, -160],
+      "id": "ai-agent-review",
+      "name": "AI Agent (Review)",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// LLM 응답 가져오기\nconst llmResponse = $input.first().json;\nconst text = llmResponse.text || llmResponse.output || llmResponse.response || '';\n\ntry {\n  // JSON 블록 추출 (```json ... ``` 형식 처리)\n  let jsonStr = text;\n  const jsonMatch = text.match(/```json\\s*([\\s\\S]*?)\\s*```/);\n  if (jsonMatch) {\n    jsonStr = jsonMatch[1];\n  } else {\n    // JSON 객체만 추출 시도\n    const objMatch = text.match(/\\{[\\s\\S]*\\}/);\n    if (objMatch) {\n      jsonStr = objMatch[0];\n    }\n  }\n  \n  const parsed = JSON.parse(jsonStr);\n  \n  // 통계 계산\n  const comments = parsed.comments || [];\n  const statistics = {\n    critical: 0,\n    warning: 0,\n    info: 0,\n    suggestion: 0\n  };\n  \n  comments.forEach(c => {\n    const severity = (c.severity || 'info').toLowerCase();\n    if (statistics.hasOwnProperty(severity)) {\n      statistics[severity]++;\n    }\n  });\n  \n  return {\n    success: true,\n    summary: parsed.summary || '리뷰 완료',\n    overall_score: parsed.overall_score || 70,\n    comments: comments,\n    statistics: statistics\n  };\n} catch (e) {\n  // JSON 파싱 실패 시 기본 응답\n  return {\n    success: true,\n    summary: text.substring(0, 200) || '리뷰 완료',\n    overall_score: 70,\n    comments: [],\n    statistics: {\n      critical: 0,\n      warning: 0,\n      info: 0,\n      suggestion: 0\n    }\n  };\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [320, -200],
+      "id": "format-review-response",
+      "name": "Format Review Response"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [560, 0],
+      "id": "respond-webhook",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst requestType = input.request_type || 'unknown';\n\nlet errorMsg = 'AI 처리 중 오류가 발생했습니다.';\n\nif (input.error) {\n  errorMsg = input.error;\n} else if (input.message) {\n  errorMsg = input.message;\n}\n\nif (requestType === 'review') {\n  return {\n    success: false,\n    error: errorMsg,\n    summary: '',\n    overall_score: 0,\n    comments: [],\n    statistics: { critical: 0, warning: 0, info: 0, suggestion: 0 }\n  };\n} else {\n  return {\n    success: false,\n    error: errorMsg,\n    description: '',\n    summary: ''\n  };\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [320, 280],
+      "id": "error-response-description",
+      "name": "Error Response (Description)"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\n\nlet errorMsg = 'AI 처리 중 오류가 발생했습니다.';\n\nif (input.error) {\n  errorMsg = input.error;\n} else if (input.message) {\n  errorMsg = input.message;\n}\n\nreturn {\n  success: false,\n  error: errorMsg,\n  summary: '',\n  overall_score: 0,\n  comments: [],\n  statistics: { critical: 0, warning: 0, info: 0, suggestion: 0 }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [320, -40],
+      "id": "error-response-review",
+      "name": "Error Response (Review)"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.0-flash",
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [0, 400],
+      "id": "gemini-description",
+      "name": "Gemini (Description)",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Gemini API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.0-flash",
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [0, -400],
+      "id": "gemini-review",
+      "name": "Gemini (Review)",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Gemini API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Switch Request Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch Request Type": {
+      "main": [
+        [
+          {
+            "node": "Prepare Review Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Description Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Description Prompt": {
+      "main": [
+        [
+          {
+            "node": "AI Agent (Description)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent (Description)": {
+      "main": [
+        [
+          {
+            "node": "Format Description Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Response (Description)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Description Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Response (Description)": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Review Prompt": {
+      "main": [
+        [
+          {
+            "node": "AI Agent (Review)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent (Review)": {
+      "main": [
+        [
+          {
+            "node": "Format Review Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Response (Review)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Review Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Response (Review)": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini (Description)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent (Description)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini (Review)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent (Review)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "executionTimeout": 300
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
