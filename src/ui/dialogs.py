@@ -335,14 +335,14 @@ class ReviewDialog:
     ):
         self.root = tk.Tk()
         self.root.title(title)
-        self.root.geometry("750x550")
+        self.root.geometry("850x700")
         self.root.resizable(True, True)
 
         # 화면 중앙에 배치
         self.root.update_idletasks()
-        x = (self.root.winfo_screenwidth() - 750) // 2
-        y = (self.root.winfo_screenheight() - 550) // 2
-        self.root.geometry(f"750x550+{x}+{y}")
+        x = (self.root.winfo_screenwidth() - 850) // 2
+        y = (self.root.winfo_screenheight() - 700) // 2
+        self.root.geometry(f"850x700+{x}+{y}")
 
         self.root.attributes("-topmost", True)
 
@@ -450,7 +450,7 @@ class ReviewDialog:
 
             # Treeview 생성
             columns = ("severity", "file", "line", "message")
-            self.tree = ttk.Treeview(comments_frame, columns=columns, show="headings", height=10)
+            self.tree = ttk.Treeview(comments_frame, columns=columns, show="headings", height=6)
             self.tree.heading("severity", text="심각도")
             self.tree.heading("file", text="파일")
             self.tree.heading("line", text="라인")
@@ -485,7 +485,7 @@ class ReviewDialog:
             self.detail_text = scrolledtext.ScrolledText(
                 detail_frame,
                 wrap=tk.WORD,
-                height=5,
+                height=10,
                 font=("Consolas", 9)
             )
             self.detail_text.pack(fill=tk.X)
@@ -544,11 +544,18 @@ class ReviewDialog:
         from tkinter import filedialog
         from .report_generator import generate_html_report
 
+        # topmost 일시 해제 (파일 다이얼로그가 보이도록)
+        self.root.attributes("-topmost", False)
+
         file_path = filedialog.asksaveasfilename(
+            parent=self.root,
             defaultextension=".html",
             filetypes=[("HTML files", "*.html")],
             initialfilename=f"review_{self.changelist}.html"
         )
+
+        # topmost 복원
+        self.root.attributes("-topmost", True)
 
         if file_path:
             try:
