@@ -16,7 +16,12 @@ class N8NClient:
         self.webhook_url = webhook_url or config.webhook_url
         self.timeout = timeout or config.timeout
 
-    def _prepare_payload(self, changelist_info: ChangelistInfo, request_type: str) -> Dict[str, Any]:
+    def _prepare_payload(
+        self,
+        changelist_info: ChangelistInfo,
+        request_type: str,
+        batch_info: Optional[Dict[str, int]] = None
+    ) -> Dict[str, Any]:
         """API 요청 페이로드 생성"""
         files_data = []
         for f in changelist_info.files:
@@ -37,7 +42,10 @@ class N8NClient:
                 "client": changelist_info.client,
                 "current_description": changelist_info.description
             },
-            "files": files_data
+            "files": files_data,
+            # 배치 컨텍스트 유지를 위한 세션 정보
+            "session_key": f"cl_{changelist_info.number}",
+            "batch_info": batch_info or {"current": 1, "total": 1}
         }
 
     def request_description(self, changelist_info: ChangelistInfo) -> Dict[str, Any]:
@@ -45,9 +53,13 @@ class N8NClient:
         payload = self._prepare_payload(changelist_info, "description")
         return self._send_request(payload)
 
-    def request_review(self, changelist_info: ChangelistInfo) -> Dict[str, Any]:
+    def request_review(
+        self,
+        changelist_info: ChangelistInfo,
+        batch_info: Optional[Dict[str, int]] = None
+    ) -> Dict[str, Any]:
         """AI 코드 리뷰 요청"""
-        payload = self._prepare_payload(changelist_info, "review")
+        payload = self._prepare_payload(changelist_info, "review", batch_info)
         return self._send_request(payload)
 
     def _send_request(self, payload: Dict[str, Any]) -> Dict[str, Any]:

@@ -100,7 +100,9 @@ class ReviewGenerator:
                 if progress_callback and total_batches > 1:
                     progress_callback(f"배치 {i}/{total_batches} 리뷰 중...")
 
-                batch_result = self._review_batch(batch_files, changelist_info)
+                # 배치 인덱스 정보 (Redis Memory 세션 컨텍스트용)
+                batch_index_info = {"current": i, "total": total_batches}
+                batch_result = self._review_batch(batch_files, changelist_info, batch_index_info)
                 batch_results.append(batch_result)
 
             # Step 4: 결과 병합
@@ -163,7 +165,8 @@ class ReviewGenerator:
     def _review_batch(
         self,
         files: List[FileChange],
-        original_info: ChangelistInfo
+        original_info: ChangelistInfo,
+        batch_index_info: Optional[Dict[str, int]] = None
     ) -> Dict[str, Any]:
         """
         단일 배치 리뷰 요청
@@ -171,12 +174,13 @@ class ReviewGenerator:
         Args:
             files: 배치에 포함된 파일 목록
             original_info: 원본 Changelist 정보
+            batch_index_info: 배치 인덱스 정보 {"current": 1, "total": 3}
 
         Returns:
             n8n 응답 딕셔너리
         """
         # 배치용 ChangelistInfo 생성
-        batch_info = ChangelistInfo(
+        batch_changelist = ChangelistInfo(
             number=original_info.number,
             user=original_info.user,
             client=original_info.client,
@@ -185,7 +189,7 @@ class ReviewGenerator:
             files=files
         )
 
-        return self.n8n.request_review(batch_info)
+        return self.n8n.request_review(batch_changelist, batch_index_info)
 
     def _merge_results(self, batch_results: List[Dict[str, Any]]) -> ReviewResult:
         """
