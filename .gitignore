@@ -11,9 +11,9 @@ env/
 
 # PyInstaller
 *.manifest
-*.spec
 dist/
-build/
+build/p4v_ai_assistant/
+build/pyinstaller/
 *.exe
 
 # IDE
