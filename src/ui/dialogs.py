@@ -619,49 +619,226 @@ class SettingsDialog:
     """설정 다이얼로그"""
 
     def __init__(self, config_manager):
+        from ..expert_profiles import EXPERT_PROFILES, get_profile_names, get_prompt
+
         self.config = config_manager
+        self.EXPERT_PROFILES = EXPERT_PROFILES
+        self.get_profile_names = get_profile_names
+        self.get_prompt = get_prompt
+
         self.root = tk.Tk()
         self.root.title("P4V AI Assistant 설정")
-        self.root.geometry("450x200")
+        self.root.geometry("600x520")
         self.root.resizable(False, False)
 
         # 화면 중앙에 배치
         self.root.update_idletasks()
-        x = (self.root.winfo_screenwidth() - 450) // 2
-        y = (self.root.winfo_screenheight() - 200) // 2
-        self.root.geometry(f"450x200+{x}+{y}")
+        x = (self.root.winfo_screenwidth() - 600) // 2
+        y = (self.root.winfo_screenheight() - 520) // 2
+        self.root.geometry(f"600x520+{x}+{y}")
+
+        # 현재 선택된 프롬프트 타입 (description/review)
+        self.current_prompt_type = "description"
 
         self._build_ui()
 
     def _build_ui(self) -> None:
-        frame = ttk.Frame(self.root, padding=20)
-        frame.pack(fill=tk.BOTH, expand=True)
+        main_frame = ttk.Frame(self.root, padding=20)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        # === 기본 설정 섹션 ===
+        basic_frame = ttk.LabelFrame(main_frame, text="기본 설정", padding=10)
+        basic_frame.pack(fill=tk.X, pady=(0, 10))
 
         # Webhook URL
-        ttk.Label(frame, text="Webhook URL:").grid(row=0, column=0, sticky=tk.W, pady=5)
-        self.url_entry = ttk.Entry(frame, width=50)
-        self.url_entry.grid(row=0, column=1, pady=5, padx=(10, 0))
+        url_frame = ttk.Frame(basic_frame)
+        url_frame.pack(fill=tk.X, pady=2)
+        ttk.Label(url_frame, text="Webhook URL:", width=15).pack(side=tk.LEFT)
+        self.url_entry = ttk.Entry(url_frame, width=55)
+        self.url_entry.pack(side=tk.LEFT, padx=(5, 0))
         self.url_entry.insert(0, self.config.webhook_url)
 
         # Timeout
-        ttk.Label(frame, text="Timeout (초):").grid(row=1, column=0, sticky=tk.W, pady=5)
-        self.timeout_entry = ttk.Entry(frame, width=10)
-        self.timeout_entry.grid(row=1, column=1, sticky=tk.W, pady=5, padx=(10, 0))
+        timeout_frame = ttk.Frame(basic_frame)
+        timeout_frame.pack(fill=tk.X, pady=2)
+        ttk.Label(timeout_frame, text="Timeout (초):", width=15).pack(side=tk.LEFT)
+        self.timeout_entry = ttk.Entry(timeout_frame, width=10)
+        self.timeout_entry.pack(side=tk.LEFT, padx=(5, 0))
         self.timeout_entry.insert(0, str(self.config.timeout))
 
-        # 버튼
-        btn_frame = ttk.Frame(frame)
-        btn_frame.grid(row=2, column=0, columnspan=2, pady=20)
+        # === 전문가 설정 섹션 ===
+        expert_frame = ttk.LabelFrame(main_frame, text="전문가 설정", padding=10)
+        expert_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
 
-        ttk.Button(btn_frame, text="저장", command=self._save, width=12).pack(side=tk.LEFT, padx=5)
-        ttk.Button(btn_frame, text="취소", command=self.root.destroy, width=12).pack(side=tk.LEFT, padx=5)
+        # 프로필 선택
+        profile_frame = ttk.Frame(expert_frame)
+        profile_frame.pack(fill=tk.X, pady=(0, 10))
+
+        ttk.Label(profile_frame, text="프로필:").pack(side=tk.LEFT)
+
+        self.profile_var = tk.StringVar()
+        profile_names = self.get_profile_names()
+        self.profile_keys = list(profile_names.keys())
+        profile_display = list(profile_names.values())
+
+        self.profile_combo = ttk.Combobox(
+            profile_frame,
+            textvariable=self.profile_var,
+            values=profile_display,
+            state="readonly",
+            width=25
+        )
+        self.profile_combo.pack(side=tk.LEFT, padx=(10, 0))
+
+        # 현재 프로필 선택
+        current_profile = self.config.expert_profile
+        if current_profile in profile_names:
+            self.profile_combo.set(profile_names[current_profile])
+        else:
+            self.profile_combo.current(0)
+
+        self.profile_combo.bind("<<ComboboxSelected>>", self._on_profile_changed)
+
+        # 프롬프트 탭 버튼
+        tab_frame = ttk.Frame(expert_frame)
+        tab_frame.pack(fill=tk.X, pady=(0, 5))
+
+        self.desc_tab_btn = ttk.Button(
+            tab_frame,
+            text="Description 프롬프트",
+            command=lambda: self._switch_tab("description"),
+            width=20
+        )
+        self.desc_tab_btn.pack(side=tk.LEFT, padx=(0, 5))
+
+        self.review_tab_btn = ttk.Button(
+            tab_frame,
+            text="Review 프롬프트",
+            command=lambda: self._switch_tab("review"),
+            width=20
+        )
+        self.review_tab_btn.pack(side=tk.LEFT)
+
+        # 프롬프트 텍스트 영역
+        self.prompt_text = tk.Text(expert_frame, height=12, width=65, wrap=tk.WORD)
+        self.prompt_text.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+
+        # 스크롤바
+        scrollbar = ttk.Scrollbar(self.prompt_text, command=self.prompt_text.yview)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.prompt_text.config(yscrollcommand=scrollbar.set)
+
+        # 기본값 복원 버튼
+        reset_btn = ttk.Button(
+            expert_frame,
+            text="기본값 복원",
+            command=self._reset_to_default,
+            width=12
+        )
+        reset_btn.pack(anchor=tk.W)
+
+        # 초기 프롬프트 로드
+        self._load_prompt("description")
+        self._update_tab_style()
+
+        # === 버튼 프레임 ===
+        btn_frame = ttk.Frame(main_frame)
+        btn_frame.pack(fill=tk.X)
+
+        ttk.Button(btn_frame, text="저장", command=self._save, width=12).pack(side=tk.RIGHT, padx=(5, 0))
+        ttk.Button(btn_frame, text="취소", command=self.root.destroy, width=12).pack(side=tk.RIGHT)
+
+    def _get_selected_profile_key(self) -> str:
+        """현재 선택된 프로필의 키 반환"""
+        selected_name = self.profile_var.get()
+        profile_names = self.get_profile_names()
+        for key, name in profile_names.items():
+            if name == selected_name:
+                return key
+        return "generic"
+
+    def _on_profile_changed(self, event=None) -> None:
+        """프로필 변경 시 프롬프트 업데이트"""
+        self._load_prompt(self.current_prompt_type)
+
+    def _switch_tab(self, prompt_type: str) -> None:
+        """프롬프트 탭 전환"""
+        # 현재 프롬프트 저장
+        self._save_current_prompt()
+        # 탭 전환
+        self.current_prompt_type = prompt_type
+        self._load_prompt(prompt_type)
+        self._update_tab_style()
+
+    def _update_tab_style(self) -> None:
+        """탭 버튼 스타일 업데이트"""
+        if self.current_prompt_type == "description":
+            self.desc_tab_btn.state(["pressed"])
+            self.review_tab_btn.state(["!pressed"])
+        else:
+            self.desc_tab_btn.state(["!pressed"])
+            self.review_tab_btn.state(["pressed"])
+
+    def _load_prompt(self, prompt_type: str) -> None:
+        """프롬프트 로드"""
+        profile_key = self._get_selected_profile_key()
+
+        # 커스텀 프롬프트 확인
+        custom_prompts = self.config.custom_prompts
+        custom = custom_prompts.get(prompt_type, "")
+
+        if custom:
+            prompt = custom
+        else:
+            # 프로필 기본 프롬프트
+            prompt = self.get_prompt(profile_key, prompt_type)
+
+        # 텍스트 영역 업데이트
+        self.prompt_text.delete("1.0", tk.END)
+        self.prompt_text.insert("1.0", prompt)
+
+    def _save_current_prompt(self) -> None:
+        """현재 프롬프트를 커스텀 프롬프트로 저장"""
+        prompt = self.prompt_text.get("1.0", tk.END).strip()
+        profile_key = self._get_selected_profile_key()
+
+        # 기본 프롬프트와 다르면 커스텀으로 저장
+        default_prompt = self.get_prompt(profile_key, self.current_prompt_type)
+
+        custom_prompts = self.config.custom_prompts.copy()
+        if prompt != default_prompt.strip():
+            custom_prompts[self.current_prompt_type] = prompt
+        else:
+            custom_prompts[self.current_prompt_type] = ""
+
+        self.config.custom_prompts = custom_prompts
+
+    def _reset_to_default(self) -> None:
+        """현재 탭의 프롬프트를 기본값으로 복원"""
+        profile_key = self._get_selected_profile_key()
+        default_prompt = self.get_prompt(profile_key, self.current_prompt_type)
+
+        self.prompt_text.delete("1.0", tk.END)
+        self.prompt_text.insert("1.0", default_prompt)
+
+        # 커스텀 프롬프트 제거
+        custom_prompts = self.config.custom_prompts.copy()
+        custom_prompts[self.current_prompt_type] = ""
+        self.config.custom_prompts = custom_prompts
 
     def _save(self) -> None:
+        # 기본 설정 저장
         self.config.webhook_url = self.url_entry.get().strip()
         try:
             self.config.timeout = int(self.timeout_entry.get().strip())
         except ValueError:
             self.config.timeout = 60
+
+        # 전문가 프로필 저장
+        self.config.expert_profile = self._get_selected_profile_key()
+
+        # 현재 프롬프트 저장
+        self._save_current_prompt()
 
         self.config.save()
         messagebox.showinfo("설정", "설정이 저장되었습니다.")

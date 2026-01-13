@@ -12,7 +12,12 @@ class ConfigManager:
     DEFAULT_CONFIG = {
         "webhook_url": "",
         "timeout": 60,
-        "language": "ko"
+        "language": "ko",
+        "expert_profile": "generic",
+        "custom_prompts": {
+            "description": "",
+            "review": ""
+        }
     }
 
     def __init__(self):
@@ -53,6 +58,22 @@ class ConfigManager:
     @timeout.setter
     def timeout(self, value: int) -> None:
         self._config["timeout"] = value
+
+    @property
+    def expert_profile(self) -> str:
+        return self._config.get("expert_profile", "generic")
+
+    @expert_profile.setter
+    def expert_profile(self, value: str) -> None:
+        self._config["expert_profile"] = value
+
+    @property
+    def custom_prompts(self) -> dict:
+        return self._config.get("custom_prompts", {"description": "", "review": ""})
+
+    @custom_prompts.setter
+    def custom_prompts(self, value: dict) -> None:
+        self._config["custom_prompts"] = value
 
     def get(self, key: str, default=None):
         return self._config.get(key, default)

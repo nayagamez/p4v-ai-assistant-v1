@@ -34,6 +34,9 @@ class N8NClient:
                 "content": ""
             })
 
+        # 전문가 컨텍스트 가져오기
+        expert_context = self._get_expert_context(request_type)
+
         return {
             "request_type": request_type,
             "changelist": {
@@ -45,8 +48,31 @@ class N8NClient:
             "files": files_data,
             # 배치 컨텍스트 유지를 위한 세션 정보
             "session_key": f"cl_{changelist_info.number}",
-            "batch_info": batch_info or {"current": 1, "total": 1}
+            "batch_info": batch_info or {"current": 1, "total": 1},
+            # 전문가 프로필 컨텍스트
+            "expert_context": expert_context
         }
+
+    def _get_expert_context(self, request_type: str) -> str:
+        """설정된 전문가 프로필의 컨텍스트 반환
+
+        Args:
+            request_type: 요청 타입 (description, review)
+
+        Returns:
+            전문가 컨텍스트 문자열 (없으면 빈 문자열)
+        """
+        from .expert_profiles import EXPERT_PROFILES
+        config = get_config()
+
+        # 커스텀 프롬프트가 있으면 우선 사용
+        custom = config.custom_prompts.get(request_type, "")
+        if custom:
+            return custom
+
+        # 프로필 기본 프롬프트 사용
+        profile = EXPERT_PROFILES.get(config.expert_profile, EXPERT_PROFILES["generic"])
+        return profile.get(f"{request_type}_prompt", "")
 
     def request_description(self, changelist_info: ChangelistInfo) -> Dict[str, Any]:
         """AI Description 생성 요청"""
