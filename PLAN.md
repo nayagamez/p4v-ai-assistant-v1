@@ -1,6 +1,6 @@
 # P4V AI Assistant - 개발 계획
 
-## 현재 상태 (v0.1)
+## 현재 상태 (v0.2)
 
 ### 완료된 기능
 - [x] 프로젝트 기본 구조 설정
@@ -12,22 +12,27 @@
 - [x] P4V Custom Tools 설치/제거 (commands/install.py)
 - [x] GUI 다이얼로그 - tkinter (ui/dialogs.py)
 - [x] n8n 워크플로우 구성 (Gemini 연동)
+- [x] **AI 코드 리뷰 기능** (commands/review.py)
+- [x] **HTML 리포트 생성** (ui/report_generator.py)
+- [x] **배치 처리 + Redis Memory 컨텍스트 유지**
 
 ---
 
-## Phase 1: AI 코드 리뷰 기능
+## Phase 1: AI 코드 리뷰 기능 ✅ 완료
 
 ### 목표
 Changelist의 코드 변경 사항을 AI가 분석하여 잠재적 문제점을 리포트
 
-### 작업 항목
-- [ ] `commands/review.py` - 코드 리뷰 로직 구현
-- [ ] HTML 리포트 템플릿 생성
-- [ ] n8n 리뷰 워크플로우 구성
-- [ ] P4V 컨텍스트 메뉴에 "AI 코드 리뷰" 추가
-- [ ] main.py에 `review` 서브커맨드 추가
+### 완료된 작업
+- [x] `commands/review.py` - 코드 리뷰 로직 구현
+- [x] `ui/report_generator.py` - HTML 리포트 템플릿
+- [x] n8n 리뷰 워크플로우 구성 (Switch 노드로 분기)
+- [x] P4V 컨텍스트 메뉴에 "AI 코드 리뷰" 추가
+- [x] main.py에 `review` 서브커맨드 추가
+- [x] 배치 분할 처리 (MAX_FILES: 50, MAX_LINES: 5000)
+- [x] Redis Chat Memory로 배치 간 컨텍스트 유지
 
-### API 응답 형식 (예정)
+### API 응답 형식
 ```json
 {
   "success": true,

@@ -6,9 +6,15 @@ P4V(Perforce Visual Client)의 Changelist 컨텍스트 메뉴에서 AI 기능을
 
 ### 현재 구현된 기능
 - **AI Description 생성**: 코드 변경 내용을 분석하여 커밋 메시지 자동 생성
+- **AI 코드 리뷰**: 변경된 코드의 잠재적 문제점 분석 및 리포트 생성
+  - 점수 및 심각도별 통계
+  - 파일별 상세 코멘트
+  - HTML 리포트 내보내기
+  - 대용량 Changelist 배치 처리 (Redis Memory로 컨텍스트 유지)
 
 ### 예정된 기능
-- AI 코드 리뷰: 변경된 코드의 잠재적 문제점 분석 및 리포트 생성
+- PyInstaller 빌드 (단일 exe)
+- NSIS 인스톨러
 
 ## 시스템 구성
 
@@ -48,15 +54,18 @@ p4v-ai-assistant-v1/
 │   ├── commands/
 │   │   ├── __init__.py
 │   │   ├── description.py   # AI Description 생성 로직
+│   │   ├── review.py        # AI 코드 리뷰 로직
 │   │   └── install.py       # P4V Custom Tools 등록
 │   └── ui/
 │       ├── __init__.py
-│       └── dialogs.py       # GUI 다이얼로그 (tkinter)
+│       ├── dialogs.py       # GUI 다이얼로그 (tkinter)
+│       └── report_generator.py  # HTML 리포트 생성
+├── n8n/                     # n8n 워크플로우 JSON
 ├── build/                   # PyInstaller 빌드 (예정)
 ├── installer/               # NSIS 인스톨러 (예정)
 ├── venv/                    # Python 가상환경
 ├── requirements.txt         # Python 의존성
-├── test_webhook.py          # n8n 웹훅 테스트 스크립트
+├── PLAN.md                  # 개발 계획
 └── README.md
 ```
 
@@ -108,6 +117,9 @@ venv\Scripts\python -m src.main uninstall
 # AI Description 생성
 venv\Scripts\python -m src.main description --changelist <CL번호>
 
+# AI 코드 리뷰
+venv\Scripts\python -m src.main review --changelist <CL번호>
+
 # 전체 옵션
 venv\Scripts\python -m src.main description -c <CL번호> -p <서버:포트> -u <사용자> --client <워크스페이스>
 
@@ -125,48 +137,63 @@ venv\Scripts\python -m src.main --help
 ### P4V에서 사용
 
 1. P4V에서 Pending Changelist 우클릭
-2. "AI Description 생성" 메뉴 클릭
-3. AI가 코드 변경 내용을 분석하여 Description 자동 생성 및 적용
+2. **"AI Description 생성"**: 코드 변경 분석 후 커밋 메시지 자동 생성
+3. **"AI 코드 리뷰"**: 코드 리뷰 결과 GUI로 표시, HTML 내보내기 가능
 
 ## n8n 워크플로우
 
 ### 워크플로우 구조
 
 ```
-Webhook → Code (프롬프트 준비) → AI Agent (Gemini) → Code (응답 포맷) → Respond to Webhook
-                                       ↓ (에러 시)
-                                 Error Response → Respond to Webhook
+Webhook → Switch (request_type) → description → AI Agent → Format → Respond
+                                → review → AI Agent (+ Redis Memory) → Format → Respond
 ```
 
 ### API 요청 형식
 
 ```json
 {
-  "request_type": "description",
+  "request_type": "description | review",
   "changelist": {
     "number": 12345,
     "user": "username",
     "client": "workspace",
     "current_description": "현재 설명"
   },
-  "files": [
-    {
-      "depot_path": "//depot/path/to/file.cpp",
-      "action": "edit",
-      "revision": 15,
-      "diff": "--- a/file.cpp\n+++ b/file.cpp\n..."
-    }
-  ]
+  "files": [...],
+  "session_key": "cl_12345",      // 리뷰 배치 컨텍스트용
+  "batch_info": { "current": 1, "total": 3 }
 }
 ```
 
-### API 응답 형식
+### API 응답 형식 (Description)
 
 ```json
 {
   "success": true,
   "description": "[Feature] 기능 설명\n\n상세 내용...",
   "summary": "기능 요약"
+}
+```
+
+### API 응답 형식 (Review)
+
+```json
+{
+  "success": true,
+  "summary": "전반적으로 양호한 코드입니다.",
+  "overall_score": 78,
+  "comments": [
+    {
+      "file_path": "//depot/.../file.cpp",
+      "line_number": 125,
+      "severity": "critical | warning | info | suggestion",
+      "category": "bug | security | performance | style | maintainability",
+      "message": "문제 설명",
+      "suggestion": "수정 제안"
+    }
+  ],
+  "statistics": { "critical": 0, "warning": 1, "info": 1, "suggestion": 1 }
 }
 ```
 
