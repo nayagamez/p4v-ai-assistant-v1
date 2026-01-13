@@ -1,6 +1,6 @@
 # P4V AI Assistant - 개발 계획
 
-## 현재 상태 (v0.2)
+## 현재 상태 (v0.3)
 
 ### 완료된 기능
 - [x] 프로젝트 기본 구조 설정
@@ -15,6 +15,8 @@
 - [x] **AI 코드 리뷰 기능** (commands/review.py)
 - [x] **HTML 리포트 생성** (ui/report_generator.py)
 - [x] **배치 처리 + Redis Memory 컨텍스트 유지**
+- [x] **PyInstaller 빌드** (dist/p4v_ai_assistant.exe)
+- [x] **커스텀 전문가 프롬프트** (Unity, Unreal, 범용)
 
 ---
 
@@ -59,22 +61,43 @@ Changelist의 코드 변경 사항을 AI가 분석하여 잠재적 문제점을 
 
 ---
 
-## Phase 2: PyInstaller 빌드
+## Phase 2: PyInstaller 빌드 ✅ 완료
 
 ### 목표
 Python 스크립트를 단일 exe 파일로 패키징
 
-### 작업 항목
-- [ ] `build/build.py` - PyInstaller 빌드 스크립트
-- [ ] `build/p4v_ai_tool.spec` - PyInstaller 설정 파일
-- [ ] 아이콘 파일 추가
-- [ ] 빌드 테스트 및 검증
+### 완료된 작업
+- [x] `build/build.py` - PyInstaller 빌드 스크립트
+- [x] `build/p4v_ai_assistant.spec` - PyInstaller 설정 파일
+- [x] `run.py` - 엔트리포인트
+- [x] `build.bat` - 원클릭 빌드 배치 파일
+- [x] 빌드 테스트 및 검증
 
-### 빌드 명령 (예정)
+### 빌드 명령
 ```bash
-python build/build.py
-# 출력: dist/p4v_ai_tool.exe
+build.bat
+# 출력: dist/p4v_ai_assistant.exe (~15MB)
 ```
+
+---
+
+## Phase 2.5: 커스텀 전문가 프롬프트 ✅ 완료
+
+### 목표
+팀별로 다른 전문가 컨텍스트를 AI에게 제공
+
+### 완료된 작업
+- [x] `src/expert_profiles.py` - 기본 프로필 정의
+- [x] 설정 다이얼로그 확장 (프로필 선택, 프롬프트 편집)
+- [x] n8n payload에 expert_context 추가
+- [x] n8n 시스템 메시지에 동적 컨텍스트 추가
+
+### 지원 프로필
+| 프로필 | 대상 |
+|--------|------|
+| 범용 전문가 | 기본값, 추가 컨텍스트 없음 |
+| Unity 2021.3 전문가 | C#, MonoBehaviour, DOTS 등 |
+| Unreal 5.7 전문가 | C++, UObject, Blueprint 등 |
 
 ---
 
