@@ -509,6 +509,9 @@ class ReviewDialog:
         btn_frame.pack(pady=(5, 0))
 
         if success:
+            view_btn = ttk.Button(btn_frame, text="HTML로 보기", command=self._on_view_html, width=12)
+            view_btn.pack(side=tk.LEFT, padx=5)
+
             export_btn = ttk.Button(btn_frame, text="HTML로 내보내기", command=self._on_export, width=15)
             export_btn.pack(side=tk.LEFT, padx=5)
 
@@ -538,6 +541,32 @@ class ReviewDialog:
             self.detail_text.delete("1.0", tk.END)
             self.detail_text.insert(tk.END, detail)
             self.detail_text.config(state=tk.DISABLED)
+
+    def _on_view_html(self) -> None:
+        """HTML로 보기 (브라우저에서 열기)"""
+        try:
+            import tempfile
+            import webbrowser
+            from .report_generator import generate_html_report
+
+            # 임시 파일 생성 (삭제하지 않음 - 브라우저가 읽어야 함)
+            temp_file = tempfile.NamedTemporaryFile(
+                mode='w',
+                suffix='.html',
+                prefix=f'review_{self.changelist}_',
+                delete=False,
+                encoding='utf-8'
+            )
+            temp_path = temp_file.name
+            temp_file.close()
+
+            # HTML 생성
+            generate_html_report(self.review_result, self.changelist, temp_path)
+
+            # 브라우저에서 열기
+            webbrowser.open(f'file://{temp_path}')
+        except Exception as e:
+            show_error("HTML 보기 실패", f"오류가 발생했습니다.\n{str(e)}")
 
     def _on_export(self) -> None:
         """HTML로 내보내기"""
