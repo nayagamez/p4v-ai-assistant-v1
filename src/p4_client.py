@@ -70,9 +70,79 @@ class P4Client:
         return self._parse_describe(output, changelist)
 
     def get_changelist_with_diff(self, changelist: int) -> ChangelistInfo:
-        """Changelist 정보와 diff 조회 (p4 describe -du)"""
-        output = self._run("describe", "-du", str(changelist))
-        return self._parse_describe_with_diff(output, changelist)
+        """Changelist 정보와 diff 조회"""
+        # 먼저 기본 정보 조회
+        output = self._run("describe", "-s", str(changelist))
+        info = self._parse_describe(output, changelist)
+
+        # pending CL인 경우 p4 diff로 diff 수집
+        if info.status == "pending":
+            self._collect_pending_diffs(info, changelist)
+        else:
+            # submitted CL인 경우 p4 describe -du 사용
+            output = self._run("describe", "-du", str(changelist))
+            info = self._parse_describe_with_diff(output, changelist)
+
+        return info
+
+    def _collect_pending_diffs(self, info: ChangelistInfo, changelist: int) -> None:
+        """Pending changelist의 파일별 diff 수집"""
+        for file_change in info.files:
+            try:
+                # action에 따라 다르게 처리
+                if file_change.action in ("add", "branch", "move/add"):
+                    # 새 파일은 전체 내용을 diff로 표시
+                    diff = self._get_new_file_content(file_change.depot_path, changelist)
+                elif file_change.action in ("delete", "move/delete"):
+                    # 삭제 파일은 간단히 표시
+                    diff = f"(파일 삭제됨: {file_change.depot_path})"
+                else:
+                    # edit, integrate 등은 p4 diff 사용
+                    # pending CL의 파일은 depot_path로 직접 diff
+                    diff = self._run("diff", "-du", file_change.depot_path)
+
+                file_change.diff = diff.strip()
+            except P4Error as e:
+                # diff 실패 시 에러 메시지 포함
+                file_change.diff = f"(diff 실패: {str(e)[:100]})"
+
+    def _get_new_file_content(self, depot_path: str, changelist: int) -> str:
+        """새로 추가된 파일의 내용을 diff 형식으로 반환"""
+        try:
+            # shelved 파일인 경우
+            content = self._run("print", "-q", f"{depot_path}@={changelist}")
+            if content:
+                lines = content.split("\n")
+                # unified diff 형식으로 변환
+                diff_lines = [f"@@ -0,0 +1,{len(lines)} @@"]
+                diff_lines.extend(f"+{line}" for line in lines)
+                return "\n".join(diff_lines)
+        except P4Error:
+            pass
+
+        try:
+            # workspace의 로컬 파일인 경우
+            # opened 파일 정보에서 로컬 경로 확인
+            opened_info = self._run("opened", "-c", str(changelist), depot_path)
+            # p4 where로 로컬 경로 확인
+            where_output = self._run("where", depot_path)
+            if where_output:
+                parts = where_output.strip().split(" ")
+                if len(parts) >= 3:
+                    local_path = parts[-1]
+                    try:
+                        with open(local_path, "r", encoding="utf-8", errors="replace") as f:
+                            content = f.read()
+                        lines = content.split("\n")
+                        diff_lines = [f"@@ -0,0 +1,{len(lines)} @@"]
+                        diff_lines.extend(f"+{line}" for line in lines)
+                        return "\n".join(diff_lines)
+                    except (IOError, OSError):
+                        pass
+        except P4Error:
+            pass
+
+        return "(새 파일 - 내용을 가져올 수 없음)"
 
     def _parse_describe(self, output: str, changelist: int) -> ChangelistInfo:
         """p4 describe 출력 파싱"""
