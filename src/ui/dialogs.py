@@ -541,28 +541,29 @@ class ReviewDialog:
 
     def _on_export(self) -> None:
         """HTML로 내보내기"""
-        from tkinter import filedialog
-        from .report_generator import generate_html_report
+        try:
+            from tkinter import filedialog
+            from .report_generator import generate_html_report
 
-        # topmost 일시 해제 (파일 다이얼로그가 보이도록)
-        self.root.attributes("-topmost", False)
+            # topmost 일시 해제 (파일 다이얼로그가 보이도록)
+            self.root.attributes("-topmost", False)
+            self.root.update()  # UI 업데이트 강제
 
-        file_path = filedialog.asksaveasfilename(
-            parent=self.root,
-            defaultextension=".html",
-            filetypes=[("HTML files", "*.html")],
-            initialfilename=f"review_{self.changelist}.html"
-        )
+            file_path = filedialog.asksaveasfilename(
+                parent=self.root,
+                defaultextension=".html",
+                filetypes=[("HTML files", "*.html")],
+                initialfile=f"review_{self.changelist}.html"
+            )
 
-        # topmost 복원
-        self.root.attributes("-topmost", True)
+            # topmost 복원
+            self.root.attributes("-topmost", True)
 
-        if file_path:
-            try:
+            if file_path:
                 generate_html_report(self.review_result, self.changelist, file_path)
                 show_info("내보내기 완료", f"리뷰 결과가 저장되었습니다.\n{file_path}")
-            except Exception as e:
-                show_error("내보내기 실패", f"파일 저장 중 오류가 발생했습니다.\n{str(e)}")
+        except Exception as e:
+            show_error("내보내기 실패", f"오류가 발생했습니다.\n{str(e)}")
 
     def update_status(self, message: str) -> None:
         """상태 메시지 업데이트"""
