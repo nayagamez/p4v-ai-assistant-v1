@@ -23,7 +23,7 @@ if %ERRORLEVEL% EQU 0 (
     echo.
     echo ========================================
     echo Build complete!
-    echo Output: dist\P4V-AI-Assistant-Setup.exe
+    echo Output: ..\dist\P4V-AI-Assistant-Setup.exe
     echo ========================================
 ) else (
     echo.
