@@ -175,22 +175,23 @@ def install_tool(exe_path: Optional[str] = None) -> dict:
             try:
                 tree = ET.parse(customtools_path)
                 root = tree.getroot()
-            except ET.ParseError as e:
-                result["message"] = f"기존 customtools.xml 파싱 실패: {e}"
-                return result
 
-            # 기존 도구들 제거
-            existing_tools = find_all_tool_elements(root)
-            for existing_tool in existing_tools:
-                root.remove(existing_tool)
+                # 기존 도구들 제거
+                existing_tools = find_all_tool_elements(root)
+                for existing_tool in existing_tools:
+                    root.remove(existing_tool)
 
-            # 모든 도구 추가
-            add_all_tools_to_root(root, resolved_exe_path)
+                # 모든 도구 추가
+                add_all_tools_to_root(root, resolved_exe_path)
 
-            if existing_tools:
-                result["message"] = "AI Assistant 도구가 업데이트되었습니다."
-            else:
-                result["message"] = "AI Assistant 도구가 추가되었습니다."
+                if existing_tools:
+                    result["message"] = "AI Assistant 도구가 업데이트되었습니다."
+                else:
+                    result["message"] = "AI Assistant 도구가 추가되었습니다."
+            except ET.ParseError:
+                # 파일이 비어있거나 유효하지 않은 XML인 경우 새로 생성
+                root = create_new_customtools_xml(resolved_exe_path)
+                result["message"] = "customtools.xml이 재생성되고 AI Assistant 도구가 추가되었습니다."
         else:
             # 새 파일 생성
             root = create_new_customtools_xml(resolved_exe_path)
