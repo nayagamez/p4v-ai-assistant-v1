@@ -39,6 +39,7 @@ class ReviewResult:
         "suggestion": 0
     })
     error: str = ""
+    files: List[FileChange] = field(default_factory=list)  # diff 데이터 포함
 
 
 class ReviewGenerator:
@@ -111,6 +112,7 @@ class ReviewGenerator:
 
             result = self._merge_results(batch_results)
             result.success = True
+            result.files = changelist_info.files  # diff 데이터 포함
 
         except P4Error as e:
             result.error = f"Perforce 오류: {str(e)}"

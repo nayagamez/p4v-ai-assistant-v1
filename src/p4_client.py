@@ -268,6 +268,54 @@ class P4Client:
         except Exception as e:
             raise P4Error(f"Description 업데이트 실패: {str(e)}")
 
+    def get_file_content(self, depot_path: str, revision: int = 0) -> str:
+        """특정 리비전의 파일 내용 조회
+
+        Args:
+            depot_path: depot 경로 (예: //depot/path/file.cpp)
+            revision: 리비전 번호 (0이면 head)
+
+        Returns:
+            파일 내용 문자열
+        """
+        try:
+            spec = f"{depot_path}#{revision}" if revision else depot_path
+            return self._run("print", "-q", spec)
+        except P4Error:
+            return ""
+
+    def get_shelved_content(self, depot_path: str, changelist: int) -> str:
+        """Shelved 파일 내용 조회
+
+        Args:
+            depot_path: depot 경로
+            changelist: changelist 번호
+
+        Returns:
+            파일 내용 문자열
+        """
+        try:
+            return self._run("print", "-q", f"{depot_path}@={changelist}")
+        except P4Error:
+            return ""
+
+    def get_have_revision(self, depot_path: str) -> int:
+        """로컬 workspace의 have 리비전 조회
+
+        Args:
+            depot_path: depot 경로
+
+        Returns:
+            have 리비전 번호 (없으면 0)
+        """
+        try:
+            output = self._run("have", depot_path)
+            # 출력 형식: //depot/file.cpp#5 - /local/path/file.cpp
+            match = re.search(r"#(\d+)", output)
+            return int(match.group(1)) if match else 0
+        except P4Error:
+            return 0
+
 
 class P4Error(Exception):
     """Perforce 관련 에러"""
