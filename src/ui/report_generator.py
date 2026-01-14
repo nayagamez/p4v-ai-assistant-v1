@@ -439,7 +439,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             color: white;
         }}
         .nav-controls {{
-            display: flex;
+            display: none;  /* TODO: diff 갯수 불일치 문제 해결 후 복원 */
             align-items: center;
             gap: 5px;
         }}
@@ -462,6 +462,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
         /* 키보드 단축키 도움말 */
         .keyboard-help {{
+            display: none;  /* TODO: 네비게이션 복원 시 함께 복원 */
             font-size: 11px;
             color: #999;
             margin-left: 10px;
