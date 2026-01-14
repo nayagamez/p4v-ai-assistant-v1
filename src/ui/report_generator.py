@@ -4,7 +4,8 @@ HTML 리포트 생성 모듈
 """
 import html
 import json
-from typing import TYPE_CHECKING, List
+import re
+from typing import TYPE_CHECKING, List, Dict, Set
 from urllib.parse import unquote
 
 if TYPE_CHECKING:
@@ -12,6 +13,17 @@ if TYPE_CHECKING:
     from ..p4_client import FileChange
 
 from .diff2html_bundle import DIFF2HTML_CSS, DIFF2HTML_JS
+
+
+def count_diff_changes(diff_text: str) -> int:
+    """diff에서 변경된 라인 수 카운트 (네비게이션 표시용)"""
+    if not diff_text:
+        return 0
+    count = 0
+    for line in diff_text.split('\n'):
+        if line.startswith('+') and not line.startswith('+++'):
+            count += 1
+    return count
 
 
 def normalize_path(path: str) -> str:
@@ -238,15 +250,18 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .file-tab .comment-badge.zero {{ background: #9e9e9e; }}
         .file-tab.active .comment-badge {{ background: rgba(255,255,255,0.4); }}
 
-        /* Diff 컨테이너 */
+        /* Diff 컨테이너 - flex 레이아웃으로 헤더 고정 */
         .file-diff {{
             display: none;
             border: 1px solid #ddd;
             border-top: none;
             border-radius: 0 0 8px 8px;
             overflow: hidden;
+            flex-direction: column;
+            height: calc(100vh - 280px);
+            min-height: 400px;
         }}
-        .file-diff.active {{ display: block; }}
+        .file-diff.active {{ display: flex; }}
         .file-header {{
             background: #f7f7f7;
             padding: 12px 15px;
@@ -254,6 +269,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             align-items: center;
             gap: 10px;
             border-bottom: 1px solid #ddd;
+            flex-shrink: 0;
+        }}
+
+        /* diff2html sticky 비활성화 (스크롤 컨테이너 충돌 방지) */
+        .d2h-code-side-linenumber,
+        .d2h-code-linenumber {{
+            position: static !important;
         }}
         .file-name {{
             font-family: 'Consolas', 'Courier New', monospace;
@@ -276,8 +298,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             font-size: 12px;
             color: #666;
         }}
-        .diff-content {{
+        /* 스크롤 영역 - 이 부분만 스크롤됨 */
+        .diff-scroll-container {{
+            flex: 1;
+            overflow-y: auto;
             overflow-x: auto;
+        }}
+        .diff-content {{
+            min-height: 100%;
         }}
         .no-diff {{
             padding: 30px;
@@ -381,6 +409,70 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .d2h-wrapper {{ margin: 0; }}
         .d2h-file-wrapper {{ border: none; margin: 0; }}
         .d2h-file-header {{ display: none; }}
+
+        /* 뷰 토글 및 네비게이션 */
+        .view-controls {{
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-left: auto;
+        }}
+        .view-toggle {{
+            display: flex;
+            gap: 2px;
+            background: #e0e0e0;
+            border-radius: 6px;
+            padding: 2px;
+        }}
+        .toggle-btn {{
+            padding: 6px 12px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            font-size: 12px;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }}
+        .toggle-btn:hover {{ background: rgba(255,255,255,0.5); }}
+        .toggle-btn.active {{
+            background: #4a90d9;
+            color: white;
+        }}
+        .nav-controls {{
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }}
+        .nav-btn {{
+            padding: 4px 8px;
+            border: 1px solid #ddd;
+            background: white;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 12px;
+        }}
+        .nav-btn:hover {{ background: #f5f5f5; }}
+        .nav-btn:disabled {{ opacity: 0.5; cursor: not-allowed; }}
+        .position-indicator {{
+            font-size: 12px;
+            color: #666;
+            min-width: 40px;
+            text-align: center;
+        }}
+
+        /* 키보드 단축키 도움말 */
+        .keyboard-help {{
+            font-size: 11px;
+            color: #999;
+            margin-left: 10px;
+        }}
+        .keyboard-help kbd {{
+            background: #f0f0f0;
+            padding: 2px 5px;
+            border-radius: 3px;
+            border: 1px solid #ddd;
+            font-family: monospace;
+        }}
     </style>
 </head>
 <body>
@@ -472,7 +564,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                         if (!targetDiff.getAttribute('data-rendered')) {{
                             renderSingleDiff(targetDiff);
                             targetDiff.setAttribute('data-rendered', 'true');
+                            initViewToggle(targetDiff);
+                            initNavigation(targetDiff);
                         }}
+
+                        // 네비게이션 상태 초기화
+                        resetNavState();
                     }}
                 }});
             }});
@@ -482,12 +579,23 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             if (firstDiff && !firstDiff.getAttribute('data-rendered')) {{
                 renderSingleDiff(firstDiff);
                 firstDiff.setAttribute('data-rendered', 'true');
+                initViewToggle(firstDiff);
+                initNavigation(firstDiff);
             }}
         }}
 
-        // 단일 파일 diff 렌더링
-        function renderSingleDiff(container) {{
-            var diffText = container.getAttribute('data-diff');
+        // 단일 파일 diff 렌더링 (mode: 'diff' 또는 'full')
+        function renderSingleDiff(container, mode) {{
+            mode = mode || 'diff';
+            var diffText = mode === 'full'
+                ? container.getAttribute('data-diff-full')
+                : container.getAttribute('data-diff');
+
+            // full 모드에서 diff-full이 없으면 일반 diff로 fallback
+            if (mode === 'full' && !diffText) {{
+                diffText = container.getAttribute('data-diff');
+            }}
+
             if (!diffText || diffText === '(바이너리 파일)' || diffText.startsWith('(')) {{
                 container.querySelector('.diff-content').innerHTML =
                     '<div class="no-diff">' + (diffText || 'diff 데이터 없음') + '</div>';
@@ -507,6 +615,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 if (commentsData) {{
                     insertComments(container, JSON.parse(commentsData));
                 }}
+
+                // 현재 모드 저장
+                container.setAttribute('data-current-mode', mode);
             }} catch (e) {{
                 container.querySelector('.diff-content').innerHTML =
                     '<div class="no-diff">diff 렌더링 실패: ' + e.message + '</div>';
@@ -574,6 +685,144 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             div.textContent = text;
             return div.innerHTML;
         }}
+
+        // 뷰 모드 토글 (diff2html 재렌더링 방식)
+        function initViewToggle(container) {{
+            container.querySelectorAll('.toggle-btn').forEach(function(btn) {{
+                btn.addEventListener('click', function() {{
+                    if (this.disabled) return;
+
+                    var mode = this.getAttribute('data-mode');
+                    var currentMode = container.getAttribute('data-current-mode') || 'diff';
+
+                    // 같은 모드면 무시
+                    if (mode === currentMode) return;
+
+                    // 버튼 상태 업데이트
+                    container.querySelectorAll('.toggle-btn').forEach(function(b) {{
+                        b.classList.remove('active');
+                    }});
+                    this.classList.add('active');
+
+                    // diff2html 재렌더링 (새 모드로)
+                    renderSingleDiff(container, mode);
+
+                    // 네비게이션 상태 초기화
+                    resetNavState();
+                }});
+            }});
+        }}
+
+        // 네비게이션 상태
+        var navState = {{
+            changeIndex: -1,
+            commentIndex: -1
+        }};
+
+        // 변경점 네비게이션
+        function navigateChange(container, direction) {{
+            var diffContent = container.querySelector('.diff-content');
+            if (!diffContent) return;
+
+            var changes = diffContent.querySelectorAll('.d2h-ins, .d2h-del');
+            if (changes.length === 0) return;
+
+            if (direction === 'next') {{
+                navState.changeIndex = Math.min(navState.changeIndex + 1, changes.length - 1);
+            }} else {{
+                navState.changeIndex = Math.max(navState.changeIndex - 1, 0);
+            }}
+
+            // 스크롤 컨테이너 내에서만 스크롤 (페이지 전체 스크롤 방지)
+            scrollToElement(container, changes[navState.changeIndex]);
+            updatePositionIndicator(container, 'change', navState.changeIndex + 1, changes.length);
+        }}
+
+        // 코멘트 네비게이션
+        function navigateComment(container, direction) {{
+            var comments = container.querySelectorAll('.ai-comment-row');
+            if (comments.length === 0) return;
+
+            if (direction === 'next') {{
+                navState.commentIndex = Math.min(navState.commentIndex + 1, comments.length - 1);
+            }} else {{
+                navState.commentIndex = Math.max(navState.commentIndex - 1, 0);
+            }}
+
+            // 스크롤 컨테이너 내에서만 스크롤 (페이지 전체 스크롤 방지)
+            scrollToElement(container, comments[navState.commentIndex]);
+            updatePositionIndicator(container, 'comment', navState.commentIndex + 1, comments.length);
+        }}
+
+        // 스크롤 컨테이너 내에서만 요소로 스크롤 (페이지 전체 스크롤 방지)
+        function scrollToElement(container, element) {{
+            var scrollContainer = container.querySelector('.diff-scroll-container');
+            if (!scrollContainer || !element) return;
+
+            var elementRect = element.getBoundingClientRect();
+            var containerRect = scrollContainer.getBoundingClientRect();
+            var offsetTop = elementRect.top - containerRect.top + scrollContainer.scrollTop;
+
+            scrollContainer.scrollTo({{
+                top: offsetTop - (scrollContainer.clientHeight / 2),
+                behavior: 'smooth'
+            }});
+        }}
+
+        function updatePositionIndicator(container, type, current, total) {{
+            var indicator = container.querySelector('.' + type + '-pos');
+            if (indicator) {{
+                indicator.textContent = current + '/' + total;
+            }}
+        }}
+
+        // 네비게이션 버튼 초기화
+        function initNavigation(container) {{
+            container.querySelectorAll('.nav-btn').forEach(function(btn) {{
+                btn.addEventListener('click', function() {{
+                    var action = this.getAttribute('data-action');
+                    if (action === 'prev-change') {{
+                        navigateChange(container, 'prev');
+                    }} else if (action === 'next-change') {{
+                        navigateChange(container, 'next');
+                    }} else if (action === 'prev-comment') {{
+                        navigateComment(container, 'prev');
+                    }} else if (action === 'next-comment') {{
+                        navigateComment(container, 'next');
+                    }}
+                }});
+            }});
+        }}
+
+        // 키보드 단축키
+        document.addEventListener('keydown', function(e) {{
+            // 입력 필드에서는 무시
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+            var activeFile = document.querySelector('.file-diff.active');
+            if (!activeFile) return;
+
+            var key = e.key.toLowerCase();
+            if (key === 'j') {{
+                e.preventDefault();
+                navigateChange(activeFile, 'next');
+            }} else if (key === 'k') {{
+                e.preventDefault();
+                navigateChange(activeFile, 'prev');
+            }} else if (key === 'n') {{
+                e.preventDefault();
+                navigateComment(activeFile, 'next');
+            }} else if (key === 'p') {{
+                e.preventDefault();
+                navigateComment(activeFile, 'prev');
+            }}
+        }});
+
+        // 파일 탭 전환 시 상태 초기화
+        function resetNavState() {{
+            navState.changeIndex = -1;
+            navState.commentIndex = -1;
+        }}
     </script>
 </body>
 </html>"""
@@ -636,12 +885,19 @@ def _generate_files_diff_html(files: List['FileChange'], comments: List['ReviewC
     html_parts = []
 
     for i, file in enumerate(files):
-        # diff 정규화
+        # diff 정규화 (변경사항만)
         normalized_diff = normalize_unified_diff(
             file.depot_path,
             file.diff,
             file.action
         )
+
+        # diff_full 정규화 (전체 소스)
+        normalized_diff_full = normalize_unified_diff(
+            file.depot_path,
+            file.diff_full,
+            file.action
+        ) if file.diff_full else ""
 
         # 이 파일의 코멘트 (URL 인코딩 정규화하여 비교)
         normalized_depot = normalize_path(file.depot_path)
@@ -649,19 +905,18 @@ def _generate_files_diff_html(files: List['FileChange'], comments: List['ReviewC
 
         # HTML 이스케이프 (data 속성용)
         escaped_diff = html.escape(normalized_diff) if normalized_diff else ""
+        escaped_diff_full = html.escape(normalized_diff_full) if normalized_diff_full else ""
 
         # 코멘트 JSON (dict 변환)
-        comments_json = json.dumps([{
+        comments_list = [{
             "file_path": c.file_path,
             "line_number": c.line_number,
             "severity": c.severity,
             "category": c.category,
             "message": c.message,
             "suggestion": c.suggestion
-        } for c in file_comments], ensure_ascii=False)
-
-        # 파일명 추출
-        file_name = file.depot_path.split("/")[-1]
+        } for c in file_comments]
+        comments_json = json.dumps(comments_list, ensure_ascii=False)
 
         # action에 따른 CSS 클래스
         action_class = file.action.replace("/", "-")  # move/add -> move-add
@@ -669,19 +924,45 @@ def _generate_files_diff_html(files: List['FileChange'], comments: List['ReviewC
         # 첫 번째 파일은 active
         active_class = "active" if i == 0 else ""
 
+        # 전체 소스 diff 데이터 존재 여부
+        has_full_diff = bool(escaped_diff_full)
+
+        # 변경된 라인 수 계산 (네비게이션용)
+        change_count = count_diff_changes(file.diff)
+
         html_parts.append(f'''
         <div class="file-diff {active_class}"
              data-file-index="{i}"
              data-file="{html.escape(file.depot_path)}"
              data-diff="{escaped_diff}"
-             data-comments='{html.escape(comments_json)}'>
+             data-diff-full="{escaped_diff_full}"
+             data-comments='{html.escape(comments_json)}'
+             data-change-count="{change_count}">
             <div class="file-header">
                 <span class="file-name">{html.escape(file.depot_path)}</span>
                 <span class="file-action {action_class}">{html.escape(file.action)}</span>
-                <span class="comment-count">{len(file_comments)} comments</span>
+                <div class="view-controls">
+                    <div class="view-toggle">
+                        <button class="toggle-btn active" data-mode="diff">변경사항만</button>
+                        <button class="toggle-btn" data-mode="full" {"disabled" if not has_full_diff else ""}>전체 소스</button>
+                    </div>
+                    <div class="nav-controls">
+                        <button class="nav-btn" data-action="prev-change" title="이전 변경 (K)">◀</button>
+                        <span class="position-indicator change-pos">-/{change_count}</span>
+                        <button class="nav-btn" data-action="next-change" title="다음 변경 (J)">▶</button>
+                    </div>
+                    <div class="nav-controls">
+                        <button class="nav-btn" data-action="prev-comment" title="이전 코멘트 (P)">◀</button>
+                        <span class="position-indicator comment-pos">-/{len(file_comments)}</span>
+                        <button class="nav-btn" data-action="next-comment" title="다음 코멘트 (N)">▶</button>
+                    </div>
+                    <span class="keyboard-help"><kbd>J</kbd>/<kbd>K</kbd> 변경 <kbd>N</kbd>/<kbd>P</kbd> 코멘트</span>
+                </div>
             </div>
-            <div class="diff-content">
-                <div class="no-diff">파일을 선택하면 diff가 표시됩니다.</div>
+            <div class="diff-scroll-container">
+                <div class="diff-content">
+                    <div class="no-diff">파일을 선택하면 diff가 표시됩니다.</div>
+                </div>
             </div>
         </div>
         ''')
