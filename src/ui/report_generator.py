@@ -5,12 +5,23 @@ HTML 리포트 생성 모듈
 import html
 import json
 from typing import TYPE_CHECKING, List
+from urllib.parse import unquote
 
 if TYPE_CHECKING:
     from ..commands.review import ReviewResult, ReviewComment
     from ..p4_client import FileChange
 
 from .diff2html_bundle import DIFF2HTML_CSS, DIFF2HTML_JS
+
+
+def normalize_path(path: str) -> str:
+    """
+    경로 정규화 (URL 인코딩 해제)
+
+    Perforce depot 경로에서 @가 %40으로 인코딩되는 문제 해결
+    예: com.unity.addressables%401.21.2 → com.unity.addressables@1.21.2
+    """
+    return unquote(path)
 
 
 def normalize_unified_diff(depot_path: str, diff_text: str, action: str) -> str:
@@ -599,7 +610,9 @@ def _generate_file_tabs_html(files: List['FileChange'], comments: List['ReviewCo
 
     for i, file in enumerate(files):
         file_name = file.depot_path.split("/")[-1]
-        file_comments = [c for c in comments if c.file_path == file.depot_path]
+        # URL 인코딩 정규화하여 비교 (예: %40 vs @)
+        normalized_depot = normalize_path(file.depot_path)
+        file_comments = [c for c in comments if normalize_path(c.file_path) == normalized_depot]
         comment_count = len(file_comments)
         action_class = file.action.replace("/", "-")
 
@@ -634,8 +647,9 @@ def _generate_files_diff_html(files: List['FileChange'], comments: List['ReviewC
             file.action
         )
 
-        # 이 파일의 코멘트
-        file_comments = [c for c in comments if c.file_path == file.depot_path]
+        # 이 파일의 코멘트 (URL 인코딩 정규화하여 비교)
+        normalized_depot = normalize_path(file.depot_path)
+        file_comments = [c for c in comments if normalize_path(c.file_path) == normalized_depot]
 
         # HTML 이스케이프 (data 속성용)
         escaped_diff = html.escape(normalized_diff) if normalized_diff else ""
