@@ -11,7 +11,7 @@
 ;--------------------------------
 ; Version Info (must be before Name)
 
-!define VERSION "0.4.1"
+!define VERSION "0.4.2"
 !define PUBLISHER "Netmarble Neo"
 
 ;--------------------------------
@@ -68,6 +68,10 @@ Page custom WebhookPage WebhookPageLeave
 ; Webhook URL Custom Page
 
 Function WebhookPage
+    ; Skip this page if config.json already exists (preserve user settings on upgrade)
+    IfFileExists "$APPDATA\P4V-AI-Assistant\config.json" 0 +2
+    Abort
+
     !insertmacro MUI_HEADER_TEXT "n8n Webhook Configuration" "Enter your n8n Webhook URL for AI features."
 
     nsDialogs::Create 1018
@@ -102,11 +106,12 @@ Section "Install" SecInstall
     ; Copy main executable
     File "..\dist\p4v_ai_assistant.exe"
 
-    ; Create config directory and file
+    ; Create config directory
     CreateDirectory "$APPDATA\P4V-AI-Assistant"
 
-    ; Write config.json if webhook URL provided
+    ; Write config.json only if it doesn't exist (preserve user customizations)
     ${If} $WebhookURL != ""
+    ${AndIfNot} ${FileExists} "$APPDATA\P4V-AI-Assistant\config.json"
         FileOpen $0 "$APPDATA\P4V-AI-Assistant\config.json" w
         FileWrite $0 '{"webhook_url": "$WebhookURL", "timeout": 60, "language": "ko", "expert_profile": "generic", "custom_prompts": {"description": "", "review": ""}}'
         FileClose $0
