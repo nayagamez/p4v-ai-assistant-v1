@@ -2,7 +2,7 @@
 
 P4V(Perforce Visual Client)의 Changelist 컨텍스트 메뉴에서 AI 기능을 사용할 수 있는 도구입니다.
 
-**현재 버전: v0.4.0**
+**현재 버전: v0.4.2**
 
 ## 기능
 
@@ -84,8 +84,10 @@ p4v-ai-assistant-v1/
 ### 인스톨러 사용 (권장)
 
 1. `P4V-AI-Assistant-Setup.exe` 실행
-2. Webhook URL 입력 (기본값 제공)
+2. Webhook URL 입력 (기본값 제공, 업그레이드 시 기존 설정 유지)
 3. 설치 완료 후 **P4V 재시작**
+
+> **참고**: 업그레이드 설치 시 기존 config.json이 있으면 Webhook URL 설정을 건너뛰고 모든 사용자 설정(커스텀 프롬프트 등)이 보존됩니다.
 
 ### 개발 환경 설정
 
@@ -224,6 +226,34 @@ build_all.bat
 - Python 3.8+
 - requests >= 2.28.0
 - tkinter (Python 기본 포함)
+
+## 변경 이력
+
+### v0.4.2
+- 업그레이드 시 사용자 설정 보존 (커스텀 프롬프트 등)
+
+### v0.4.1
+- 타임아웃 설정값 미적용 버그 수정
+
+### v0.4.0
+- Submitted, History 뷰 컨텍스트 메뉴 지원 (%p → %c)
+- CLI --version 옵션 추가
+- 설정 다이얼로그에 버전 표시
+- 버전 관리 시스템 구현 (단일 소스)
+
+### v0.3.0
+- 전문가 프로필 기능 (Unity, Unreal, 범용)
+- NSIS 인스톨러
+
+### v0.2.0
+- AI 코드 리뷰 기능
+- HTML 리포트 생성
+- 배치 처리 + Redis Memory 컨텍스트 유지
+
+### v0.1.0
+- AI Description 생성 기능
+- P4V Custom Tools 연동
+- PyInstaller 빌드
 
 ## 라이선스
 
