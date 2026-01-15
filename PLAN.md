@@ -1,6 +1,6 @@
 # P4V AI Assistant - 개발 계획
 
-## 현재 상태 (v0.4)
+## 현재 상태 (v0.4.0)
 
 ### 완료된 기능
 - [x] 프로젝트 기본 구조 설정
@@ -18,6 +18,9 @@
 - [x] **PyInstaller 빌드** (dist/p4v_ai_assistant.exe)
 - [x] **커스텀 전문가 프롬프트** (Unity, Unreal, 범용)
 - [x] **NSIS 인스톨러** (dist/P4V-AI-Assistant-Setup.exe)
+- [x] **버전 관리 시스템** (src/__init__.py → installer.nsi 동기화)
+- [x] **CLI --version 옵션**
+- [x] **Submitted, History 뷰 컨텍스트 메뉴 지원** (%p → %c)
 
 ---
 
@@ -125,11 +128,27 @@ cd installer && build_installer.bat
 
 ---
 
+## Phase 3.5: 버전 관리 시스템 ✅ 완료
+
+### 목표
+버전을 단일 소스에서 관리하고, 빌드 시 자동으로 인스톨러에 반영
+
+### 완료된 작업
+- [x] `src/__init__.py`에 `__version__` 정의 (단일 소스)
+- [x] `build/sync_version.py` - 버전 동기화 스크립트
+- [x] `build_all.bat` - 버전 동기화 단계 추가
+- [x] CLI `--version` 옵션 추가
+- [x] 설정 다이얼로그 하단에 버전 표시
+- [x] 인스톨러 타이틀에 버전 표시
+- [x] `%p` → `%c` 변경 (Submitted, History 뷰 컨텍스트 메뉴 지원)
+
+---
+
 ## Phase 4: 추가 개선사항
 
 ### 기능 개선 (우선순위 높음)
-- [ ] **Add 파일 전체 내용 리뷰** - 새로 추가된 파일은 diff 대신 전체 내용을 전송하여 리뷰
-- [ ] Description 생성 후 미리보기 → 적용 확인
+- [x] **Add 파일 전체 내용 리뷰** - 새로 추가된 파일은 diff 대신 전체 내용을 전송하여 리뷰
+- [x] **Description 생성 후 미리보기 → 적용 확인** - DescriptionDialog에서 미리보기 후 적용 버튼
 - [ ] 코드 리뷰 결과 P4V 주석으로 추가 옵션
 - [ ] 여러 Changelist 일괄 처리
 
