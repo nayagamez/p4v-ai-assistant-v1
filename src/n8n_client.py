@@ -11,10 +11,10 @@ from .config_manager import get_config
 
 
 class N8NClient:
-    def __init__(self, webhook_url: Optional[str] = None, timeout: int = 60):
+    def __init__(self, webhook_url: Optional[str] = None, timeout: Optional[int] = None):
         config = get_config()
         self.webhook_url = webhook_url or config.webhook_url
-        self.timeout = timeout or config.timeout
+        self.timeout = timeout if timeout is not None else config.timeout
 
     def _prepare_payload(
         self,
