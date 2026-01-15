@@ -7,6 +7,7 @@ import sys
 
 import threading
 
+from . import __version__
 from .config_manager import get_config
 from .commands.description import run_description_command
 from .commands.review import run_review_command, ReviewResult
@@ -179,8 +180,13 @@ def cmd_uninstall(args):
 
 def main():
     parser = argparse.ArgumentParser(
-        prog="p4v_ai_tool",
+        prog="p4v_ai_assistant",
         description="P4V AI Assistant - AI 기반 Description 생성 및 코드 리뷰"
+    )
+    parser.add_argument(
+        "--version", "-V",
+        action="version",
+        version=f"P4V AI Assistant v{__version__}"
     )
     subparsers = parser.add_subparsers(dest="command", help="사용 가능한 명령")
 

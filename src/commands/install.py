@@ -12,13 +12,13 @@ from typing import Optional, Tuple
 TOOLS = [
     {
         "name": "AI Description 생성",
-        "arguments": "description --changelist %p",
-        "context_menu": True,  # Changelist 컨텍스트 메뉴에 추가
+        "arguments": "description --changelist %c",
+        "context_menu": True,  # Changelist 컨텍스트 메뉴에 추가 (%c: 모든 CL 뷰에서 동작)
     },
     {
         "name": "AI 코드 리뷰",
-        "arguments": "review --changelist %p",
-        "context_menu": True,  # Changelist 컨텍스트 메뉴에 추가
+        "arguments": "review --changelist %c",
+        "context_menu": True,  # Changelist 컨텍스트 메뉴에 추가 (%c: 모든 CL 뷰에서 동작)
     },
     {
         "name": "AI Assistant 설정",
@@ -75,8 +75,8 @@ def get_command_and_args(exe_path: str, tool_arguments: str) -> Tuple[str, str, 
     """
     실행 명령, 인자, 작업 디렉토리 반환
 
-    PyInstaller exe: (exe_path, "description --changelist %p", "")
-    Python script: (python.exe, "-m src.main description --changelist %p", project_root)
+    PyInstaller exe: (exe_path, "description --changelist %c", "")
+    Python script: (python.exe, "-m src.main description --changelist %c", project_root)
     """
     if getattr(sys, 'frozen', False):
         # PyInstaller로 빌드된 exe인 경우

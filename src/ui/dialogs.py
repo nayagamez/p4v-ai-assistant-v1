@@ -745,6 +745,10 @@ class SettingsDialog:
         btn_frame = ttk.Frame(main_frame)
         btn_frame.pack(fill=tk.X)
 
+        # 버전 표시
+        from .. import __version__
+        ttk.Label(btn_frame, text=f"v{__version__}", foreground="gray").pack(side=tk.LEFT)
+
         ttk.Button(btn_frame, text="저장", command=self._save, width=12).pack(side=tk.RIGHT, padx=(5, 0))
         ttk.Button(btn_frame, text="취소", command=self.root.destroy, width=12).pack(side=tk.RIGHT)
 

@@ -6,7 +6,19 @@ echo ========================================
 cd /d "%~dp0"
 
 echo.
-echo [1/2] Building executable...
+echo [1/3] Syncing version...
+echo ----------------------------------------
+call venv\Scripts\python build\sync_version.py
+
+if %ERRORLEVEL% NEQ 0 (
+    echo.
+    echo ERROR: Version sync failed!
+    pause
+    exit /b 1
+)
+
+echo.
+echo [2/3] Building executable...
 echo ----------------------------------------
 call venv\Scripts\pip install -r requirements.txt -q
 call venv\Scripts\pyinstaller --clean build\p4v_ai_assistant.spec
@@ -19,7 +31,7 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo.
-echo [2/2] Building installer...
+echo [3/3] Building installer...
 echo ----------------------------------------
 "C:\Program Files (x86)\NSIS\makensis.exe" installer\installer.nsi
 

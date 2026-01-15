@@ -9,27 +9,27 @@
 !include "LogicLib.nsh"
 
 ;--------------------------------
+; Version Info (must be before Name)
+
+!define VERSION "0.4.0"
+!define PUBLISHER "Netmarble Neo"
+
+;--------------------------------
 ; General
 
-Name "P4V AI Assistant"
+Name "P4V AI Assistant ${VERSION}"
 OutFile "..\dist\P4V-AI-Assistant-Setup.exe"
 InstallDir "$PROGRAMFILES\P4V-AI-Assistant"
 InstallDirRegKey HKLM "Software\P4V-AI-Assistant" "InstallDir"
 RequestExecutionLevel admin
 Unicode True
 
-;--------------------------------
-; Version Info
-
-!define VERSION "0.3.0"
-!define PUBLISHER "Naya Games"
-
 VIProductVersion "${VERSION}.0"
 VIAddVersionKey "ProductName" "P4V AI Assistant"
 VIAddVersionKey "CompanyName" "${PUBLISHER}"
 VIAddVersionKey "FileVersion" "${VERSION}"
 VIAddVersionKey "FileDescription" "P4V AI Assistant Installer"
-VIAddVersionKey "LegalCopyright" "Copyright (c) 2025 ${PUBLISHER}"
+VIAddVersionKey "LegalCopyright" "Copyright (c) 2026 ${PUBLISHER}"
 
 ;--------------------------------
 ; Variables
