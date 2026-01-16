@@ -91,15 +91,43 @@ p4v-ai-assistant-v1/
 
 ### 개발 환경 설정
 
+#### 필수 요구사항
+
+| 도구 | 버전 | 용도 | 설치 방법 |
+|------|------|------|----------|
+| Python | 3.8+ | 런타임 | [python.org](https://www.python.org/downloads/) |
+| NSIS | 3.x | 인스톨러 빌드 | [nsis.sourceforge.io](https://nsis.sourceforge.io/Download) |
+| Perforce CLI | - | p4 명령어 | P4V 설치 시 포함 |
+
+> **NSIS 설치 참고**: NSIS 설치 후 `makensis.exe`가 PATH에 포함되어야 합니다. 기본 설치 경로는 `C:\Program Files (x86)\NSIS\`입니다.
+
+#### 환경 구성
+
 ```bash
-# 가상환경 생성
+# 1. 저장소 클론
+git clone <repository-url>
+cd p4v-ai-assistant-v1
+
+# 2. 가상환경 생성
 python -m venv venv
 
-# 의존성 설치
+# 3. 의존성 설치
 venv\Scripts\pip install -r requirements.txt
 
-# P4V 컨텍스트 메뉴에 도구 등록
+# 4. (선택) P4V 컨텍스트 메뉴에 개발 버전 등록
 venv\Scripts\python -m src.main install
+```
+
+#### 개발 모드 실행
+
+```bash
+# 가상환경 활성화
+venv\Scripts\activate
+
+# CLI 직접 실행
+python -m src.main --version
+python -m src.main description -c <CL번호>
+python -m src.main review -c <CL번호>
 ```
 
 ### 설정 파일
@@ -212,14 +240,33 @@ Webhook → Switch (request_type) → description → AI Agent → Format → Re
 
 ## 빌드
 
+### 전체 빌드
+
 ```bash
 # 전체 빌드 (버전 동기화 → exe → 인스톨러)
 build_all.bat
 ```
 
+빌드 과정:
+1. `build/sync_version.py` - `src/__init__.py`의 버전을 `installer.nsi`에 동기화
+2. PyInstaller - `run.py`를 단일 exe로 패키징
+3. NSIS - 인스톨러 생성 (`makensis.exe` 필요)
+
 출력:
 - `dist/p4v_ai_assistant.exe` (~15MB)
 - `dist/P4V-AI-Assistant-Setup.exe` (~15MB)
+
+### 개별 빌드
+
+```bash
+# exe만 빌드 (인스톨러 없이)
+venv\Scripts\pyinstaller build/p4v_ai_assistant.spec --distpath dist --workpath build/temp --noconfirm
+
+# 인스톨러만 빌드 (exe가 이미 있을 때)
+makensis installer/installer.nsi
+```
+
+> **주의**: 인스톨러 빌드 시 NSIS가 설치되어 있어야 합니다. [NSIS 다운로드](https://nsis.sourceforge.io/Download)
 
 ## 의존성
 
