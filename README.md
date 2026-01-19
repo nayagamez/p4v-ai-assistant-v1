@@ -104,17 +104,13 @@ p4v-ai-assistant-v1/
 #### 환경 구성
 
 ```bash
-# 1. 저장소 클론
-git clone <repository-url>
-cd p4v-ai-assistant-v1
-
-# 2. 가상환경 생성
+# 1. 가상환경 생성
 python -m venv venv
 
-# 3. 의존성 설치
+# 2. 의존성 설치
 venv\Scripts\pip install -r requirements.txt
 
-# 4. (선택) P4V 컨텍스트 메뉴에 개발 버전 등록
+# 3. (선택) P4V 컨텍스트 메뉴에 개발 버전 등록
 venv\Scripts\python -m src.main install
 ```
 
